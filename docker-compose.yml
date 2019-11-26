@@ -1,0 +1,32 @@
+version: '3.2'
+
+services:
+    db:
+      image: postgres:9.5
+      volumes:
+          - postgres-data:/var/lib/postgresql/data
+
+    redis:
+      image: redis:latest
+      volumes:
+          - redis-data:/data
+
+    server:
+      build:
+        context: ./
+      env_file:
+          - .env
+      command: bash -c '/code/scripts/wait-for-it.sh db:5432 && /code/scripts/run_develop.sh'
+      volumes:
+          - ./:/code
+          - media:/media
+      ports:
+          - '8009:8009'
+      depends_on:
+          - db
+          - redis
+
+volumes:
+  media:
+  postgres-data:
+  redis-data:
