@@ -22,6 +22,7 @@ RUN apk add --no-cache --virtual .app-deps \
         libxslt-dev \
         zlib-dev \
         jpeg-dev \
+        cmake clang clang-dev make g++ libc-dev \
     && $PIP3 install --upgrade pip \
     && $PIP3 install --no-cache-dir -r requirements.txt \
     && apk del --no-cache .build-deps
