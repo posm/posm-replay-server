@@ -2,7 +2,7 @@ from django.db import models
 
 
 class ReplayTool(models.Model):
-    """Singelton model that stores state of replay tool"""
+    """Singleton model that stores state of replay tool"""
     STATUS_NOT_TRIGGERRED = 'not_triggered'
     STATUS_GATHERING_CHANGESETS = 'gathering_changesets'
     STATUS_EXTRACTING_LOCAL_AOI = 'extracting_local_aoi'
