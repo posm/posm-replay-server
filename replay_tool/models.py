@@ -36,6 +36,14 @@ class ReplayTool(models.Model):
     def __str__(self):
         return self.status
 
+    @classmethod
+    def reset(cls, status=STATUS_NOT_TRIGGERRED):
+        r, _ = cls.objects.get_or_create()
+        r.status = status
+        r.current_state_completed = True
+        r.errorred = False
+        r.save()
+
     def save(self, *args, **kwargs):
         # Just allow single instance
         self.pk = 1

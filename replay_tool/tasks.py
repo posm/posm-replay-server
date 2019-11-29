@@ -25,8 +25,8 @@ def get_first_changeset_id() -> int:
     config = {
         'host': os.environ.get('POSM_HOSTNAME'),
         'dbname': os.environ.get('POSM_DB_NAME'),
-        'user': os.environ.get('POSM_DB_USER'),
-        'password': os.environ.get('POSM_DB_PASSWORD'),
+        'user': os.environ.get('POSM_POSM_DB_USER'),
+        'password': os.environ.get('POSM_POSM_DB_PASSWORD'),
     }
     with psycopg2.connect(**config) as conn:
         with conn.cursor() as cur:
@@ -103,18 +103,18 @@ def gather_changesets():
 
 
 @set_error_status_on_exception(
-    prev_status=ReplayTool.STATUS_GATHERING_CHANGESETS,
-    curr_status=ReplayTool.STATUS_EXTRACTING_LOCAL_AOI
+    prev_status=ReplayTool.STATUS_EXTRACTING_UPSTREAM_AOI,
+    curr_status=ReplayTool.STATUS_EXTRACTING_UPSTREAM_AOI
 )
 def get_local_aoi_extract():
-    db_user = os.environ.get('DB_USER')
-    db_password = os.environ.get('DB_PASSWORD')
-    db_host = os.environ.get('DB_HOST')
+    db_user = os.environ.get('POSM_DB_USER')
+    db_password = os.environ.get('POSM_DB_PASSWORD')
+    db_host = os.environ.get('POSM_DB_HOST')
     aoi_root = os.environ.get('AOI_ROOT')
     aoi_name = os.environ.get('AOI_NAME')
 
     if not db_user or not db_password or not db_host or not aoi_root or not aoi_name:
-        raise Exception('AOI_ROOT, AOI_NAME, DB_HOST, DB_USER and DB_PASSWORD must all be defined in env')
+        raise Exception('AOI_ROOT, AOI_NAME, POSM_DB_HOST, POSM_DB_USER and POSM_DB_PASSWORD must all be defined in env')
 
     path = os.path.join(aoi_root, aoi_name, 'local_aoi.osm')
     command = f'''osmosis --read-apidb host="{db_host}" user={db_user} \
@@ -143,7 +143,7 @@ def get_local_aoi_extract():
 
 @set_error_status_on_exception(
     prev_status=ReplayTool.STATUS_GATHERING_CHANGESETS,
-    curr_status=ReplayTool.STATUS_EXTRACTING_LOCAL_AOI
+    curr_status=ReplayTool.STATUS_EXTRACTING_UPSTREAM_AOI
 )
 def get_current_aoi_extract():
     aoi_root = os.environ.get('AOI_ROOT')

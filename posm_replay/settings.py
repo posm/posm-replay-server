@@ -71,6 +71,24 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'posm_replay.wsgi.application'
 
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        '': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+    }
+}
+
 
 # Database
 # https://docs.djangoproject.com/en/2.2/ref/settings/#databases
