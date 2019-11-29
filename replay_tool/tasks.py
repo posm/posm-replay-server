@@ -25,8 +25,8 @@ def get_first_changeset_id() -> int:
     config = {
         'host': os.environ.get('POSM_DB_HOST'),
         'dbname': os.environ.get('POSM_DB_NAME'),
-        'user': os.environ.get('POSM_POSM_DB_USER'),
-        'password': os.environ.get('POSM_POSM_DB_PASSWORD'),
+        'user': os.environ.get('POSM_DB_USER'),
+        'password': os.environ.get('POSM_DB_PASSWORD'),
     }
     with psycopg2.connect(**config) as conn:
         with conn.cursor() as cur:
