@@ -23,7 +23,7 @@ def get_overpass_query(s, w, n, e):
 
 def get_first_changeset_id() -> int:
     config = {
-        'host': os.environ.get('POSM_HOSTNAME'),
+        'host': os.environ.get('POSM_DB_HOST'),
         'dbname': os.environ.get('POSM_DB_NAME'),
         'user': os.environ.get('POSM_POSM_DB_USER'),
         'password': os.environ.get('POSM_POSM_DB_PASSWORD'),
@@ -109,19 +109,19 @@ def gather_changesets():
 def get_local_aoi_extract():
     db_user = os.environ.get('POSM_DB_USER')
     db_password = os.environ.get('POSM_DB_PASSWORD')
-    db_host = os.environ.get('POSM_DB_HOST')
     aoi_root = os.environ.get('AOI_ROOT')
+    osmosis_db_host = os.environ.get('OSMOSIS_DB_HOST')
     aoi_name = os.environ.get('AOI_NAME')
 
-    if not db_user or not db_password or not db_host or not aoi_root or not aoi_name:
-        raise Exception('AOI_ROOT, AOI_NAME, POSM_DB_HOST, POSM_DB_USER and POSM_DB_PASSWORD must all be defined in env')
+    if not db_user or not db_password or not osmosis_db_host or not aoi_root or not aoi_name:
+        raise Exception('AOI_ROOT, AOI_NAME, OSMOSIS_DB_HOST, POSM_DB_USER and POSM_DB_PASSWORD must all be defined in env')
 
     path = os.path.join(aoi_root, aoi_name, 'local_aoi.osm')
-    command = f'''osmosis --read-apidb host="{db_host}" user={db_user} \
+    command = f'''osmosis --read-apidb host={osmosis_db_host} user={db_user} \
         password={db_password} validateSchemaVersion=no --write-xml file="{path}"
     '''
     # Write command to named pipe
-    with open('osmosis_command_reader.fifo', 'w+') as f:
+    with open('osmosis_command_reader.fifo', 'w') as f:
         f.write(command)
 
     # wait
