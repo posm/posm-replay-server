@@ -104,7 +104,7 @@ def gather_changesets():
 
 @set_error_status_on_exception(
     prev_status=ReplayTool.STATUS_EXTRACTING_UPSTREAM_AOI,
-    curr_status=ReplayTool.STATUS_EXTRACTING_UPSTREAM_AOI
+    curr_status=ReplayTool.STATUS_EXTRACTING_LOCAL_AOI
 )
 def get_local_aoi_extract():
     db_user = os.environ.get('POSM_DB_USER')
@@ -118,7 +118,7 @@ def get_local_aoi_extract():
 
     path = os.path.join(aoi_root, aoi_name, 'local_aoi.osm')
     command = f'''osmosis --read-apidb host={osmosis_db_host} user={db_user} \
-        password={db_password} validateSchemaVersion=no --write-xml file="{path}"
+        password={db_password} validateSchemaVersion=no --write-xml file={path}
     '''
     # Write command to named pipe
     with open('osmosis_command_reader.fifo', 'w') as f:
