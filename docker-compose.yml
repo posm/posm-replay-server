@@ -19,6 +19,7 @@ services:
       command: bash -c '/code/scripts/wait-for-it.sh db:5432 && /code/scripts/prod_exec.sh'
       volumes:
           - ./:/code
+          - /opt/data/aoi/:/aoi
           - media:/media
       ports:
           - '8009:8009'

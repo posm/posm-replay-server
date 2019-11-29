@@ -2,8 +2,13 @@
 
 export PYTHONUNBUFFERED=1
 
-pip3 install -r requirements.txt
+pipenv install -r requirements.txt
 
-celery -A posm_reolay worker --concurrency=1 -l info &
+# Create pipe to read result
+# TODO: set this in env var
+rm osmosis_result_reader.fifo 2>/dev/null
+mkfifo osmosis_result_reader.fifo
 
-python3 manage.py runserver 0.0.0.0:6007
+pipenv run celery -A posm_reolay worker --concurrency=1 -l info &
+
+pipenv run python3 manage.py runserver 0.0.0.0:6007

@@ -1,0 +1,25 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+django-stubs = "*"
+mypy = "*"
+djangorestframework-stubs = "*"
+
+[packages]
+django = ">=2.2,<2.3"
+djangorestframework = "==3.9.4"
+celery = {extras = ["redis"],version = "==4.3.0"}
+requests = "==2.22.0"
+pytest-django = "==3.6.0"
+psycopg2 = "==2.7.6.1"
+pytest = "==3.9.3"
+django-cors-headers = "==3.1.1"
+djangorestframework-camel-case = "==1.1.2"
+uwsgi = "*"
+mock = "==3.0.5"
+
+[requires]
+python_version = "3.7"

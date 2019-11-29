@@ -24,7 +24,8 @@ RUN apk add --no-cache --virtual .app-deps \
         jpeg-dev \
         cmake clang clang-dev make g++ libc-dev \
     && $PIP3 install --upgrade pip \
-    && $PIP3 install --no-cache-dir -r requirements.txt \
+    && $PIP3 install --upgrade pipenv \
+    && pipenv install -r requirements.txt \
     && apk del --no-cache .build-deps
 
 COPY . /code/
