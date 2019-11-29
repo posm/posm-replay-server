@@ -109,12 +109,12 @@ def gather_changesets():
 def get_local_aoi_extract():
     db_user = os.environ.get('POSM_DB_USER')
     db_password = os.environ.get('POSM_DB_PASSWORD')
-    aoi_root = os.environ.get('AOI_ROOT')
+    aoi_root = os.environ.get('OSMOSIS_AOI_ROOT')
     osmosis_db_host = os.environ.get('OSMOSIS_DB_HOST')
     aoi_name = os.environ.get('AOI_NAME')
 
     if not db_user or not db_password or not osmosis_db_host or not aoi_root or not aoi_name:
-        raise Exception('AOI_ROOT, AOI_NAME, OSMOSIS_DB_HOST, POSM_DB_USER and POSM_DB_PASSWORD must all be defined in env')
+        raise Exception('OSMOSIS_AOI_ROOT, AOI_NAME, OSMOSIS_DB_HOST, POSM_DB_USER and POSM_DB_PASSWORD must all be defined in env')
 
     path = os.path.join(aoi_root, aoi_name, 'local_aoi.osm')
     command = f'''osmosis --read-apidb host={osmosis_db_host} user={db_user} \
