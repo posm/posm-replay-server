@@ -1,4 +1,4 @@
-FROM python:3.7-alpine
+FROM ubuntu:18.04
 
 MAINTAINER togglecorp info@togglecorp.com
 
@@ -10,23 +10,26 @@ WORKDIR /code
 
 COPY ./requirements.txt /code/requirements.txt
 
-RUN apk add --no-cache --virtual .app-deps \
-        git bash gcc libpq coreutils libxslt \
-    && apk add --no-cache --virtual .build-deps \
-        subversion python3-dev \
-        musl-dev \
-        linux-headers \
-        postgresql-dev \
+# Update and install common packages with apt
+RUN apt-get update -y && apt-get install -y \
+        # Basic Packages
+        git \
+        locales \
+        vim \
+        curl \
+        gnupg \
+        apt-transport-https \
         ca-certificates \
-        libxml2-dev \
-        libxslt-dev \
-        zlib-dev \
-        jpeg-dev \
-        cmake clang clang-dev make g++ libc-dev \
-    && $PIP3 install --upgrade pip \
-    && $PIP3 install --upgrade pipenv \
-    && pipenv install -r requirements.txt \
-    && apk del --no-cache .build-deps
+        cron \
+        unzip \
+        python3 \
+        python3-dev \
+        python3-setuptools \
+        python3-pip \
+        # For osmium
+        libosmium2-dev libprotozero-dev rapidjson-dev libboost-program-options-dev \
+        libbz2-dev zlib1g-dev libexpat1-dev cmake pandoc \
+    && pip3 install -r requirements.txt
 
 COPY . /code/
 
