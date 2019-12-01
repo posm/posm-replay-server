@@ -3,10 +3,11 @@ from django.db import models
 
 class ReplayTool(models.Model):
     """Singleton model that stores state of replay tool"""
-    STATUS_NOT_TRIGGERRED = 'not_triggered'
-    STATUS_GATHERING_CHANGESETS = 'gathering_changesets'
-    STATUS_EXTRACTING_LOCAL_AOI = 'extracting_local_aoi'
-    STATUS_EXTRACTING_UPSTREAM_AOI = 'extracting_upstream_aoi'
+    STATUS_NOT_TRIGGERRED = 'not_triggered'  # Step 0, initial state
+    STATUS_GATHERING_CHANGESETS = 'gathering_changesets'  # Step 1
+    STATUS_EXTRACTING_UPSTREAM_AOI = 'extracting_upstream_aoi'  # Step 2
+    STATUS_EXTRACTING_LOCAL_AOI = 'extracting_local_aoi'  # Step 3
+    STATUS_FILTERING_REFERENCED_OSM_ELEMENTS = 'filtering_referenced_osm_elements'  # Step 4
     STATUS_CONFLICTS = 'conflicts'
     STATUS_RESOLVED = 'resolved'
     STATUS_PUSH_CONFLICTS = 'push_conflicts'
@@ -17,6 +18,7 @@ class ReplayTool(models.Model):
         (STATUS_GATHERING_CHANGESETS, 'Gathering Changesets'),
         (STATUS_EXTRACTING_LOCAL_AOI, 'Extracting Local Aoi'),
         (STATUS_EXTRACTING_UPSTREAM_AOI, 'Extracting Upstream Aoi'),
+        (STATUS_FILTERING_REFERENCED_OSM_ELEMENTS, 'Filtering referenced osm elements'),
         (STATUS_CONFLICTS, 'Conflicts'),
         (STATUS_RESOLVED, 'Resolved'),
         (STATUS_PUSH_CONFLICTS, 'Push_conflicts'),
