@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.postgres.fields import JSONField
 
 
 class ReplayTool(models.Model):
@@ -21,8 +22,8 @@ class ReplayTool(models.Model):
         (STATUS_FILTERING_REFERENCED_OSM_ELEMENTS, 'Filtering referenced osm elements'),
         (STATUS_CONFLICTS, 'Conflicts'),
         (STATUS_RESOLVED, 'Resolved'),
-        (STATUS_PUSH_CONFLICTS, 'Push_conflicts'),
-        (STATUS_PUSHED_UPSTREAM, 'Pushed_upstream'),
+        (STATUS_PUSH_CONFLICTS, 'Push Conflicts'),
+        (STATUS_PUSHED_UPSTREAM, 'Pushed Upstream'),
     )
 
     status = models.CharField(
@@ -73,3 +74,37 @@ class LocalChangeSet(models.Model):
 
     def __str__(self):
         return f'Local Changeset # {self.changeset_id}'
+
+
+class ConflictingOSMElement(models.Model):
+    local_data = JSONField(default=dict)
+    aoi_data = JSONField(default=dict)
+    resolved_data = JSONField(default=dict, null=True, blank=True)
+    is_resolved = models.BooleanField(default=False)
+
+    class Meta:
+        abstract = True
+
+
+class ConflictingNode(ConflictingOSMElement):
+    node_id = models.PositiveIntegerField(unique=True)
+
+    def __str__(self):
+        status = 'Resolved' if self.resolved else 'Conflicting'
+        return f'Node {self.node_id}: {status}'
+
+
+class ConflictingWay(ConflictingOSMElement):
+    way_id = models.PositiveIntegerField(unique=True)
+
+    def __str__(self):
+        status = 'Resolved' if self.resolved else 'Conflicting'
+        return f'Way {self.way_id}: {status}'
+
+
+class ConflictingRelation(ConflictingOSMElement):
+    relation_id = models.PositiveIntegerField(unique=True)
+
+    def __str__(self):
+        status = 'Resolved' if self.resolved else 'Conflicting'
+        return f'Relation {self.node_id}: {status}'
