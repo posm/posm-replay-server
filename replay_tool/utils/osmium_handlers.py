@@ -81,7 +81,7 @@ class ElementsFilterHandler(osmium.SimpleHandler):
                 self.deleted_elements['nodes'].add(n.id)
                 self.referenced_elements['nodes'].add(n.id)
             else:
-                del self.added_elements['nodes'][n.id]
+                self.added_elements['nodes'].remove(n.id)
         else:
             # Add to modified elements only if it is not in added elements,
             # Because we have to flag it as added node

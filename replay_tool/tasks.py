@@ -2,15 +2,28 @@ import requests
 import time
 import os
 import json
+from functools import reduce
 
 import tempfile
 
 import psycopg2
 
-from .models import ReplayTool, LocalChangeSet
+from .models import ReplayTool, LocalChangeSet, ConflictingNode
+
 from .utils.decorators import set_error_status_on_exception
 from .utils.osm_api import get_changeset_data, get_changeset_meta
-from .utils.osmium_handlers import OSMElementsTracker, ElementsFilterHandler
+from .utils.osmium_handlers import (
+    OSMElementsTracker,
+    ElementsFilterHandler,
+    AOIHandler
+)
+from .utils.common import (
+    get_aoi_path,
+    get_current_aoi_path,
+    get_overpass_query,
+    filter_nodes_from_tracker,
+    get_conflicting_nodes,
+)
 
 import logging
 logger = logging.getLogger(__name__)
@@ -19,18 +32,6 @@ logger = logging.getLogger(__name__)
 OVERPASS_API_URL = 'http://overpass-api.de/api/interpreter'
 
 OSMOSIS_COMMAND_TIMEOUT_SECS = 10
-
-
-def get_aoi_path():
-    aoi_root = os.environ.get('AOI_ROOT')
-    aoi_name = os.environ.get('AOI_NAME')
-    if not aoi_root or not aoi_name:
-        raise Exception('AOI_ROOT and AOI_NAME must both be defined in env')
-    return os.path.join(aoi_root, aoi_name)
-
-
-def get_overpass_query(s, w, n, e):
-    return f'(node({s},{w},{n},{e});<;>>;>;);out meta;'
 
 
 def get_first_changeset_id() -> int:
@@ -146,7 +147,7 @@ def get_current_aoi_extract():
     response = requests.get(OVERPASS_API_URL, data={'data': overpass_query})
 
     # Write response to <aoi_path>/current_aoi.osm
-    with open(os.path.join(aoi_path, 'current_aoi.osm'), 'wb') as f:
+    with open(get_current_aoi_path(), 'wb') as f:
         f.write(response.content)
     return True
 
@@ -155,17 +156,14 @@ def track_elements_from_local_changesets():
     tracker = OSMElementsTracker()
     for changeset in LocalChangeSet.objects.all():
         # Create named temp file
-        tf = tempfile.NamedTemporaryFile(suffix='.osm')
+        tf = tempfile.NamedTemporaryFile(suffix='.osc')
+        tf.write(changeset.changeset_data)
         filter_handler = ElementsFilterHandler(tracker)
         filter_handler.apply_file(tf.name)
         # TODO: check if tracker is updated NOTE: hope that tracker is updated
-    # Now we have refed/added/modified/deleted nodes
 
-    # TODO: Get nodes info from Updated Local AOI and save to db
-
-    # TODO: Get nodes info from updated Upstream AOI and save to db
-
-    # TODO: Compare them and flag conflicting if they do not match
+    # Now we have refed/added/modified/deleted nodes in tracker
+    return tracker
 
 
 @set_error_status_on_exception(
@@ -174,8 +172,39 @@ def track_elements_from_local_changesets():
 )
 def filter_referenced_columns():
     aoi_path = get_aoi_path()
+    local_aoi_path = os.path.join(aoi_path, 'local_aoi.osm')
+    current_aoi_path = os.path.join(aoi_path, 'current_aoi.osm')
 
     tracker = track_elements_from_local_changesets()
+
+    local_aoi_handler = AOIHandler()
+    local_aoi_handler.apply_file(local_aoi_path)
+    current_aoi_handler = AOIHandler()
+    current_aoi_handler.apply_file(current_aoi_path)
+
+    # TODO: let filter_nodes_from_tracker only provide referenced_nodes
+    aoi_nodes = reduce(
+        filter_nodes_from_tracker(tracker),
+        current_aoi_handler.nodes,
+        {},
+    )
+    aoi_referenced_nodes = aoi_nodes['referenced']
+
+    local_nodes = reduce(
+        filter_nodes_from_tracker(tracker),
+        local_aoi_handler.nodes,
+        {},
+    )
+    local_referenced_nodes = local_nodes['referenced']
+
+    conflicting_nodes = get_conflicting_nodes(local_referenced_nodes, aoi_referenced_nodes)
+    for local_node_dict, aoi_node_dict in conflicting_nodes:
+        # Creating conflicting nodes with default resolved status False
+        ConflictingNode.objects.create(
+            id=local_node_dict['id'],
+            local_data=local_node_dict,
+            aoi_data=aoi_node_dict
+        )
 
 
 def task_prepare_data_for_replay_tool():
