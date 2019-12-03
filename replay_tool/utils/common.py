@@ -3,6 +3,21 @@ from functools import reduce
 
 from replay_tool.serializers import NodeSerializer, WaySerializer, RelationSerializer
 
+from typing import Any, Callable, Tuple, List
+from mypy_extensions import TypedDict
+
+
+class FilteredElements(TypedDict):
+    nodes: Any
+    relations: Any
+    ways: Any
+
+
+class ConflictingElements(TypedDict):
+    nodes: List[Tuple[object, object]]
+    ways: List[Tuple[object, object]]
+    relations: List[Tuple[object, object]]
+
 
 def get_aoi_path() -> str:
     aoi_root = os.environ.get('AOI_ROOT')
@@ -24,9 +39,9 @@ def get_overpass_query(s, w, n, e) -> str:
     return f'(node({s},{w},{n},{e});<;>>;>;);out meta;'
 
 
-def filter_elements_from_tracker(item, tracker):
+def filter_elements_from_tracker(item, tracker) -> Callable[[dict, Tuple[int, object]], dict]:
     """This function is used inside reducer to filter item[nodes/ways/relations]"""
-    def filter_func(acc: dict, id_elem: (int, object)):
+    def filter_func(acc: dict, id_elem: Tuple[int, object]) -> dict:
         # id_elem is from local/upstream aoi
         eid, elem = id_elem
         if eid in tracker.added_elements[item]:
@@ -41,9 +56,9 @@ def filter_elements_from_tracker(item, tracker):
     return filter_func
 
 
-def filter_elements_from_aoi_handler(tracker, aoi_handler):
+def filter_elements_from_aoi_handler(tracker, aoi_handler) -> FilteredElements:
     """This function is used inside reducer to filter osm elements"""
-    elements: dict = {}
+    elements: FilteredElements = {'nodes': {}, 'relations': {}, 'ways': {}}
 
     elements['nodes'] = reduce(
         filter_elements_from_tracker('nodes', tracker),
@@ -117,8 +132,7 @@ def do_elements_conflict(element1_serialized: dict, element2_serialized: dict) -
     e1_members_keyvals = {x['k']: x['v'] for x in e1_members}
     e2_members_keyvals = {x['k']: x['v'] for x in e2_members}
 
-    if e1_members_keyvals != e2_members_keyvals:
-        return True
+    return e1_members_keyvals != e2_members_keyvals
 
 
 def filter_conflicting_pairs(local_referenced_elements, aoi_referenced_elements, Serializer):
@@ -137,8 +151,8 @@ def filter_conflicting_pairs(local_referenced_elements, aoi_referenced_elements,
     return conflicting_elements
 
 
-def get_conflicting_elements(local_referenced_elements, aoi_referenced_elements):
-    return {
+def get_conflicting_elements(local_referenced_elements, aoi_referenced_elements) -> ConflictingElements:
+    conflicting_elems: ConflictingElements = {
         'nodes': filter_conflicting_pairs(
             local_referenced_elements['nodes'],
             aoi_referenced_elements['nodes'],
@@ -155,3 +169,4 @@ def get_conflicting_elements(local_referenced_elements, aoi_referenced_elements)
             RelationSerializer,
         ),
     }
+    return conflicting_elems

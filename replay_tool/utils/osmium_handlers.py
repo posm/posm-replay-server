@@ -39,6 +39,54 @@ class OSMElementsTracker:
             'nodes': set(), 'relations': set(), 'ways': set()
         }
 
+    def get_added_elements(self, aoi_handler):
+        return {
+            'nodes': [
+                v for k, v in aoi_handler.nodes.items()
+                if k in self.added_elements['nodes']
+            ],
+            'ways': [
+                v for k, v in aoi_handler.ways.items()
+                if k in self.added_elements['ways']
+            ],
+            'relations': [
+                v for k, v in aoi_handler.relations.items()
+                if k in self.added_elements['relations']
+            ],
+        }
+
+    def get_deleted_elements(self, aoi_handler):
+        return {
+            'nodes': [
+                v for k, v in aoi_handler.nodes.items()
+                if k in self.deleted_elements['nodes']
+            ],
+            'ways': [
+                v for k, v in aoi_handler.ways.items()
+                if k in self.deleted_elements['ways']
+            ],
+            'relations': [
+                v for k, v in aoi_handler.relations.items()
+                if k in self.deleted_elements['relations']
+            ],
+        }
+
+    def get_modified_elements(self, aoi_handler):
+        return {
+            'nodes': [
+                v for k, v in aoi_handler.nodes.items()
+                if k in self.modified_elements['nodes']
+            ],
+            'ways': [
+                v for k, v in aoi_handler.ways.items()
+                if k in self.modified_elements['ways']
+            ],
+            'relations': [
+                v for k, v in aoi_handler.relations.items()
+                if k in self.modified_elements['relations']
+            ],
+        }
+
 
 class ElementsFilterHandler(osmium.SimpleHandler):
     """

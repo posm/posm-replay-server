@@ -1,8 +1,10 @@
 import os
 import requests
 
+from typing import Optional
 
-def get_changeset_meta(changeset_id) -> str:
+
+def get_changeset_meta(changeset_id) -> Optional[str]:
     osm_base_url = os.environ.get('OSM_BASE_URL', 'http://localhost:3000')
     meta_url = f'{osm_base_url}/api/0.6/changeset/{changeset_id}'
     response = requests.get(meta_url)

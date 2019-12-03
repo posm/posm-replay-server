@@ -7,6 +7,8 @@ import tempfile
 
 import psycopg2
 
+from django.db import transaction
+
 from .models import (
     ReplayTool, LocalChangeSet, ConflictingNode,
     ConflictingWay, ConflictingRelation,
@@ -25,6 +27,10 @@ from .utils.common import (
     get_overpass_query,
     filter_elements_from_aoi_handler,
     get_conflicting_elements,
+
+    # Typings
+    FilteredElements,
+    ConflictingElements,
 )
 
 import logging
@@ -34,6 +40,12 @@ logger = logging.getLogger(__name__)
 OVERPASS_API_URL = 'http://overpass-api.de/api/interpreter'
 
 OSMOSIS_COMMAND_TIMEOUT_SECS = 10
+
+ITEM_CLASS_MAP = {
+    'nodes': ConflictingNode,
+    'ways': ConflictingWay,
+    'relations': ConflictingRelation,
+}
 
 
 def get_first_changeset_id() -> int:
@@ -168,6 +180,7 @@ def track_elements_from_local_changesets():
     return tracker
 
 
+@transaction.atomic
 @set_error_status_on_exception(
     prev_status=ReplayTool.STATUS_EXTRACTING_LOCAL_AOI,
     curr_status=ReplayTool.STATUS_FILTERING_REFERENCED_OSM_ELEMENTS
@@ -184,32 +197,29 @@ def filter_referenced_elements():
     current_aoi_handler = AOIHandler()
     current_aoi_handler.apply_file(current_aoi_path)
 
-    aoi_referenced_elements = filter_elements_from_aoi_handler(tracker, current_aoi_handler)
+    aoi_referenced_elements: FilteredElements = filter_elements_from_aoi_handler(tracker, current_aoi_handler)
 
-    local_referenced_elements = filter_elements_from_aoi_handler(tracker, local_aoi_handler)
+    local_referenced_elements: FilteredElements = filter_elements_from_aoi_handler(tracker, local_aoi_handler)
 
-    conflicting_elements = get_conflicting_elements(local_referenced_elements, aoi_referenced_elements)
-    for local_node_dict, aoi_node_dict in conflicting_elements['nodes']:
-        # Creating conflicting nodes with default resolved status False
-        ConflictingNode.objects.create(
-            node_id=local_node_dict['id'],
-            local_data=local_node_dict,
-            aoi_data=aoi_node_dict
-        )
-    for local_way_dict, aoi_way_dict in conflicting_elements['ways']:
-        # Creating conflicting ways with default resolved status False
-        ConflictingWay.objects.create(
-            way_id=local_way_dict['id'],
-            local_data=local_way_dict,
-            aoi_data=aoi_way_dict
-        )
-    for local_relation_dict, aoi_relation_dict in conflicting_elements['relations']:
-        # Creating conflicting relations with default resolved status False
-        ConflictingRelation.objects.create(
-            relation_id=local_relation_dict['id'],
-            local_data=local_relation_dict,
-            aoi_data=aoi_relation_dict
-        )
+    local_added_elements = tracker.get_added_elements(local_aoi_handler)
+    local_deleted_elements = tracker.get_deleted_elements(local_aoi_handler)
+
+    for item, elems in local_added_elements.items():
+        for elem in elems:
+            modelClass = ITEM_CLASS_MAP[item]
+            modelClass.objects.create(local_data=elem, status=modelClass.LOCAL_ACTION_ADDED)
+
+    for item, elems in local_deleted_elements.items():
+        for elem in elems:
+            modelClass = ITEM_CLASS_MAP[item]
+            modelClass.objects.create(local_data=elem, status=modelClass.LOCAL_ACTION_DELETED)
+
+    conflicting_elements: ConflictingElements = get_conflicting_elements(
+        local_referenced_elements, aoi_referenced_elements
+    )
+
+    for item, conflicting_items in conflicting_elements.items():
+        ITEM_CLASS_MAP[item].create_multiple_local_aoi_data(conflicting_items)
 
 
 def task_prepare_data_for_replay_tool():

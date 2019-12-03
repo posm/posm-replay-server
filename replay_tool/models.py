@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, transaction
 from django.contrib.postgres.fields import JSONField
 
 
@@ -40,6 +40,7 @@ class ReplayTool(models.Model):
         return self.status
 
     @classmethod
+    @transaction.atomic
     def reset(cls, status=STATUS_NOT_TRIGGERRED):
         r, _ = cls.objects.get_or_create()
         r.status = status
@@ -73,14 +74,30 @@ class LocalChangeSet(models.Model):
     )
 
     def __str__(self):
+        # TODO: REMOVE THIS
+        from .tasks import get_aoi_path
         return f'Local Changeset # {self.changeset_id}'
 
 
 class ConflictingOSMElement(models.Model):
+    LOCAL_ACTION_ADDED = 'added'
+    LOCAL_ACTION_DELETED = 'deleted'
+    LOCAL_ACTION_MODIFIED = 'modified'
+
+    CHOICES_LOCAL_ACTION = (
+        (LOCAL_ACTION_ADDED, 'Added'),
+        (LOCAL_ACTION_DELETED, 'Deleted'),
+        (LOCAL_ACTION_MODIFIED, 'Modified'),
+    )
     local_data = JSONField(default=dict)
     aoi_data = JSONField(default=dict)
     resolved_data = JSONField(default=dict, null=True, blank=True)
     is_resolved = models.BooleanField(default=False)
+    local_action = models.CharField(
+        max_length=15,
+        choices=CHOICES_LOCAL_ACTION,
+        default=LOCAL_ACTION_MODIFIED,
+    )
 
     class Meta:
         abstract = True
@@ -93,6 +110,17 @@ class ConflictingNode(ConflictingOSMElement):
         status = 'Resolved' if self.resolved else 'Conflicting'
         return f'Node {self.node_id}: {status}'
 
+    @classmethod
+    @transaction.atomic
+    def create_multiple_local_aoi_data(cls, local_aoi_pairs, **kwargs):
+        for loc, aoi in local_aoi_pairs:
+            cls.objects.create(
+                node_id=loc['id'],
+                local_data=loc,
+                aoi_data=aoi,
+                **kwargs
+            )
+
 
 class ConflictingWay(ConflictingOSMElement):
     way_id = models.PositiveIntegerField(unique=True)
@@ -101,6 +129,17 @@ class ConflictingWay(ConflictingOSMElement):
         status = 'Resolved' if self.resolved else 'Conflicting'
         return f'Way {self.way_id}: {status}'
 
+    @classmethod
+    @transaction.atomic
+    def create_multiple_local_aoi_data(cls, local_aoi_pairs, **kwargs):
+        for loc, aoi in local_aoi_pairs:
+            cls.objects.create(
+                way_id=loc['id'],
+                local_data=loc,
+                aoi_data=aoi,
+                **kwargs
+            )
+
 
 class ConflictingRelation(ConflictingOSMElement):
     relation_id = models.PositiveIntegerField(unique=True)
@@ -108,3 +147,14 @@ class ConflictingRelation(ConflictingOSMElement):
     def __str__(self):
         status = 'Resolved' if self.resolved else 'Conflicting'
         return f'Relation {self.node_id}: {status}'
+
+    @classmethod
+    @transaction.atomic
+    def create_multiple_local_aoi_data(cls, local_aoi_pairs, **kwargs):
+        for loc, aoi in local_aoi_pairs:
+            cls.objects.create(
+                relation_id=loc['id'],
+                local_data=loc,
+                aoi_data=aoi,
+                **kwargs
+            )

@@ -21,10 +21,10 @@ class MyPyErrorLocation:
 
 @register()
 def mypy(app_configs, **kwargs) -> List:
-    print("Performing mypy checks...\n")
+    print("Performing MYPY checks...\n")
 
     # By default run mypy against the whole database everytime checks are performed.
-    # If performance is an issue then `app_configs` can be inspected and the scope 
+    # If performance is an issue then `app_configs` can be inspected and the scope
     # of the mypy check can be restricted
     results = api.run([settings.BASE_DIR])
     error_messages = results[0]

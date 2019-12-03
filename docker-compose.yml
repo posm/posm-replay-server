@@ -22,7 +22,7 @@ services:
           - /opt/data/aoi/:/aoi
           - media:/media
       ports:
-          - '8009:8009'
+        - '6007:6007'
       depends_on:
           - db
           - redis
