@@ -13,14 +13,37 @@ class TagSerializer(serializers.Serializer):
     v = serializers.CharField()
 
 
-class NodeSerializer(serializers.Serializer):
+class BaseElementSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     version = serializers.IntegerField()
     changeset = serializers.IntegerField()
     deleted = serializers.BooleanField()
     timestamp = serializers.DateTimeField()
     uid = serializers.IntegerField()
-    location = LocationSerializer()
-    tags = TagSerializer(many=True)
     user = serializers.CharField()
+    tags = TagSerializer(many=True)
     visible = serializers.BooleanField()
+
+
+class NodeSerializer(BaseElementSerializer):
+    location = LocationSerializer()
+
+
+class NodeRefSerializer(serializers.Serializer):
+    ref = serializers.IntegerField()
+    x = serializers.IntegerField()
+    y = serializers.IntegerField()
+
+
+class WaySerializer(BaseElementSerializer):
+    nodes = NodeRefSerializer(many=True)
+
+
+class RelationMemberSerializer(serializers.Serializer):
+    ref = serializers.IntegerField()
+    role = serializers.CharField()
+    type = serializers.CharField()
+
+
+class RelationSerializer(BaseElementSerializer):
+    members = RelationMemberSerializer(many=True)

@@ -71,21 +71,30 @@ class ElementsFilterHandler(osmium.SimpleHandler):
     def deleted_elements(self):
         return self.elements_tracker.deleted_elements
 
-    def node(self, n):
-        if n.version == 1:
-            self.added_elements['nodes'].add(n.id)
-        elif not n.visible:
+    def handle_element(self, element_type: str, element):
+        if element.version == 1:
+            self.added_elements[element_type].add(element.id)
+        elif not element.visible:
             # If not visible and exists in self.added_elements,
             # remove it from added elements. Else, add as deleted and referenced
-            if n.id not in self.added_elements['nodes']:
-                self.deleted_elements['nodes'].add(n.id)
-                self.referenced_elements['nodes'].add(n.id)
+            if element.id not in self.added_elements[element_type]:
+                self.deleted_elements[element_type].add(element.id)
+                self.referenced_elements[element_type].add(element.id)
             else:
-                self.added_elements['nodes'].remove(n.id)
+                self.added_elements[element_type].remove(element.id)
         else:
             # Add to modified elements only if it is not in added elements,
-            # Because we have to flag it as added node
+            # Because we have to flag it as added element
             # Once locally added, it does not matter if it is modified
-            if n.id not in self.added_elements['nodes']:
-                self.modified_elements['nodes'].add(n.id)
-                self.referenced_elements['nodes'].add(n.id)
+            if element.id not in self.added_elements[element_type]:
+                self.modified_elements[element_type].add(element.id)
+                self.referenced_elements[element_type].add(element.id)
+
+    def node(self, n):
+        self.handle_element('nodes', n)
+
+    def way(self, w):
+        self.handle_element('ways', w)
+
+    def relation(self, r):
+        self.handle_element('relations', r)

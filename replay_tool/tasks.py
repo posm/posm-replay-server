@@ -2,13 +2,15 @@ import requests
 import time
 import os
 import json
-from functools import reduce
 
 import tempfile
 
 import psycopg2
 
-from .models import ReplayTool, LocalChangeSet, ConflictingNode
+from .models import (
+    ReplayTool, LocalChangeSet, ConflictingNode,
+    ConflictingWay, ConflictingRelation,
+)
 
 from .utils.decorators import set_error_status_on_exception
 from .utils.osm_api import get_changeset_data, get_changeset_meta
@@ -21,8 +23,8 @@ from .utils.common import (
     get_aoi_path,
     get_current_aoi_path,
     get_overpass_query,
-    filter_nodes_from_tracker,
-    get_conflicting_nodes,
+    filter_elements_from_aoi_handler,
+    get_conflicting_elements,
 )
 
 import logging
@@ -103,7 +105,8 @@ def get_local_aoi_extract():
     aoi_name = os.environ.get('AOI_NAME')
 
     if not db_user or not db_password or not osmosis_db_host or not osmosis_aoi_root or not aoi_name:
-        raise Exception('OSMOSIS_AOI_ROOT, AOI_NAME, OSMOSIS_DB_HOST, POSM_DB_USER and POSM_DB_PASSWORD must all be defined in env')
+        raise Exception(
+            'OSMOSIS_AOI_ROOT, AOI_NAME, OSMOSIS_DB_HOST, POSM_DB_USER and POSM_DB_PASSWORD must all be defined in env')
 
     path = os.path.join(osmosis_aoi_root, aoi_name, 'local_aoi.osm')
     command = f'''osmosis --read-apidb host={osmosis_db_host} user={db_user} \
@@ -138,7 +141,7 @@ def get_current_aoi_extract():
     aoi_path = get_aoi_path()
     manifest_path = os.path.join(aoi_path, 'manifest.json')
 
-    # TODO: Check if manifest file exist
+    # TODO: Check if manifest file exists
     with open(manifest_path) as f:
         manifest = json.load(f)
         [w, s, e, n] = manifest['bbox']
@@ -160,7 +163,6 @@ def track_elements_from_local_changesets():
         tf.write(changeset.changeset_data)
         filter_handler = ElementsFilterHandler(tracker)
         filter_handler.apply_file(tf.name)
-        # TODO: check if tracker is updated NOTE: hope that tracker is updated
 
     # Now we have refed/added/modified/deleted nodes in tracker
     return tracker
@@ -170,7 +172,7 @@ def track_elements_from_local_changesets():
     prev_status=ReplayTool.STATUS_EXTRACTING_LOCAL_AOI,
     curr_status=ReplayTool.STATUS_FILTERING_REFERENCED_OSM_ELEMENTS
 )
-def filter_referenced_columns():
+def filter_referenced_elements():
     aoi_path = get_aoi_path()
     local_aoi_path = os.path.join(aoi_path, 'local_aoi.osm')
     current_aoi_path = os.path.join(aoi_path, 'current_aoi.osm')
@@ -182,28 +184,31 @@ def filter_referenced_columns():
     current_aoi_handler = AOIHandler()
     current_aoi_handler.apply_file(current_aoi_path)
 
-    # TODO: let filter_nodes_from_tracker only provide referenced_nodes
-    aoi_nodes = reduce(
-        filter_nodes_from_tracker(tracker),
-        current_aoi_handler.nodes,
-        {},
-    )
-    aoi_referenced_nodes = aoi_nodes['referenced']
+    aoi_referenced_elements = filter_elements_from_aoi_handler(tracker, current_aoi_handler)
 
-    local_nodes = reduce(
-        filter_nodes_from_tracker(tracker),
-        local_aoi_handler.nodes,
-        {},
-    )
-    local_referenced_nodes = local_nodes['referenced']
+    local_referenced_elements = filter_elements_from_aoi_handler(tracker, local_aoi_handler)
 
-    conflicting_nodes = get_conflicting_nodes(local_referenced_nodes, aoi_referenced_nodes)
-    for local_node_dict, aoi_node_dict in conflicting_nodes:
+    conflicting_elements = get_conflicting_elements(local_referenced_elements, aoi_referenced_elements)
+    for local_node_dict, aoi_node_dict in conflicting_elements['nodes']:
         # Creating conflicting nodes with default resolved status False
         ConflictingNode.objects.create(
-            id=local_node_dict['id'],
+            node_id=local_node_dict['id'],
             local_data=local_node_dict,
             aoi_data=aoi_node_dict
+        )
+    for local_way_dict, aoi_way_dict in conflicting_elements['ways']:
+        # Creating conflicting ways with default resolved status False
+        ConflictingWay.objects.create(
+            way_id=local_way_dict['id'],
+            local_data=local_way_dict,
+            aoi_data=aoi_way_dict
+        )
+    for local_relation_dict, aoi_relation_dict in conflicting_elements['relations']:
+        # Creating conflicting relations with default resolved status False
+        ConflictingRelation.objects.create(
+            relation_id=local_relation_dict['id'],
+            local_data=local_relation_dict,
+            aoi_data=aoi_relation_dict
         )
 
 
@@ -227,6 +232,6 @@ def task_prepare_data_for_replay_tool():
     get_local_aoi_extract()
     logger.info("Got local aoi extract")
 
-    logger.info("Filtering referenced columns")
-    filter_referenced_columns()
-    logger.info("Filtered referenced columns")
+    logger.info("Filtering referenced elements")
+    filter_referenced_elements()
+    logger.info("Filtered referenced elements")
