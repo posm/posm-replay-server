@@ -41,9 +41,9 @@ class ReplayTool(models.Model):
 
     @classmethod
     @transaction.atomic
-    def reset(cls, status=STATUS_NOT_TRIGGERRED):
+    def reset(cls, state=STATUS_NOT_TRIGGERRED):
         r, _ = cls.objects.get_or_create()
-        r.status = status
+        r.state = state
         r.is_current_state_complete = True
         r.has_errored = False
         # Delete other items

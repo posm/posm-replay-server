@@ -12,6 +12,7 @@ from .models import (
     ConflictingWay, ConflictingRelation,
 )
 
+from .serializers import NodeSerializer, WaySerializer, RelationSerializer
 from .utils.decorators import set_error_status_on_exception
 from .utils.osm_api import get_changeset_data, get_changeset_meta
 from .utils.osmium_handlers import (
@@ -44,6 +45,12 @@ ITEM_CLASS_MAP = {
     'nodes': ConflictingNode,
     'ways': ConflictingWay,
     'relations': ConflictingRelation,
+}
+
+ITEM_SERIALIZER_MAP = {
+    'nodes': NodeSerializer,
+    'ways': WaySerializer,
+    'relations': RelationSerializer,
 }
 
 
@@ -164,7 +171,6 @@ def track_elements_from_local_changesets():
     for changeset in LocalChangeSet.objects.all():
         # Create named temp file
         tf = tempfile.NamedTemporaryFile(suffix='.osc')
-        print('CHANGESET', changeset.changeset_data)
         tf.write(changeset.changeset_data.encode('utf-8'))
         tf.seek(0)
         filter_handler = ElementsFilterHandler(tracker)
@@ -201,12 +207,20 @@ def filter_referenced_elements_and_detect_conflicts():
     for item, elems in local_added_elements.items():
         for elem in elems:
             modelClass = ITEM_CLASS_MAP[item]
-            modelClass.objects.create(local_data=elem, local_action=modelClass.LOCAL_ACTION_ADDED)
+            serializerClass = ITEM_SERIALIZER_MAP[item]
+            modelClass.objects.create(
+                local_data=serializerClass(elem).data,
+                local_action=modelClass.LOCAL_ACTION_ADDED
+            )
 
     for item, elems in local_deleted_elements.items():
         for elem in elems:
             modelClass = ITEM_CLASS_MAP[item]
-            modelClass.objects.create(local_data=elem, local_action=modelClass.LOCAL_ACTION_DELETED)
+            serializerClass = ITEM_SERIALIZER_MAP[item]
+            modelClass.objects.create(
+                local_data=serializerClass(elem).data,
+                local_action=modelClass.LOCAL_ACTION_DELETED
+            )
 
     conflicting_elements: ConflictingElements = get_conflicting_elements(
         local_referenced_elements, aoi_referenced_elements
