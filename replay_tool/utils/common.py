@@ -1,9 +1,11 @@
 import os
+import json
 from functools import reduce
+from datetime import datetime
 
 from replay_tool.serializers import NodeSerializer, WaySerializer, RelationSerializer
 
-from typing import Any, Callable, Tuple, List
+from typing import Any, Callable, Tuple, List, Optional
 from mypy_extensions import TypedDict
 
 
@@ -19,12 +21,36 @@ class ConflictingElements(TypedDict):
     relations: List[Tuple[object, object]]
 
 
+def get_aoi_name(exception_if_not_set=False) -> Optional[str]:
+    aoi_name = os.environ.get('AOI_NAME')
+    if exception_if_not_set and not aoi_name:
+        raise Exception('AOI_ROOT and AOI_NAME must both be defined in env')
+    return aoi_name
+
+
+def get_aoi_created_datetime() -> datetime:
+    aoi_path = get_aoi_path()
+    return datetime.utcfromtimestamp(os.path.getctime(aoi_path))
+
+
 def get_aoi_path() -> str:
     aoi_root = os.environ.get('AOI_ROOT')
-    aoi_name = os.environ.get('AOI_NAME')
+    aoi_name = get_aoi_name()
     if not aoi_root or not aoi_name:
         raise Exception('AOI_ROOT and AOI_NAME must both be defined in env')
     return os.path.join(aoi_root, aoi_name)
+
+
+def get_current_aoi_bbox() -> List[float]:
+    aoi_path = get_aoi_path()
+    manifest_path = os.path.join(aoi_path, 'manifest.json')
+
+    # TODO: Check if manifest file exists
+    with open(manifest_path) as f:
+        manifest = json.load(f)
+        bbox = manifest['bbox']
+        # bbox is of the form [w, s, e, n]
+        return bbox
 
 
 def get_local_aoi_path() -> str:
