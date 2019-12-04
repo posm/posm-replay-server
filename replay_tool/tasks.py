@@ -86,8 +86,8 @@ def collect_changesets_from_apidb(first_changeset_id):
 
 
 @set_error_status_on_exception(
-    prev_status=ReplayTool.STATUS_NOT_TRIGGERRED,
-    curr_status=ReplayTool.STATUS_GATHERING_CHANGESETS
+    prev_state=ReplayTool.STATUS_NOT_TRIGGERRED,
+    curr_state=ReplayTool.STATUS_GATHERING_CHANGESETS
 )
 def gather_changesets():
     try:
@@ -105,8 +105,8 @@ def gather_changesets():
 
 
 @set_error_status_on_exception(
-    prev_status=ReplayTool.STATUS_EXTRACTING_UPSTREAM_AOI,
-    curr_status=ReplayTool.STATUS_EXTRACTING_LOCAL_AOI
+    prev_state=ReplayTool.STATUS_EXTRACTING_UPSTREAM_AOI,
+    curr_state=ReplayTool.STATUS_EXTRACTING_LOCAL_AOI
 )
 def get_local_aoi_extract():
     db_user = os.environ.get('POSM_DB_USER')
@@ -145,8 +145,8 @@ def get_local_aoi_extract():
 
 
 @set_error_status_on_exception(
-    prev_status=ReplayTool.STATUS_GATHERING_CHANGESETS,
-    curr_status=ReplayTool.STATUS_EXTRACTING_UPSTREAM_AOI
+    prev_state=ReplayTool.STATUS_GATHERING_CHANGESETS,
+    curr_state=ReplayTool.STATUS_EXTRACTING_UPSTREAM_AOI
 )
 def get_current_aoi_extract():
     [w, s, e, n] = get_current_aoi_bbox()
@@ -176,10 +176,10 @@ def track_elements_from_local_changesets():
 
 @transaction.atomic
 @set_error_status_on_exception(
-    prev_status=ReplayTool.STATUS_EXTRACTING_LOCAL_AOI,
-    curr_status=ReplayTool.STATUS_FILTERING_REFERENCED_OSM_ELEMENTS
+    prev_state=ReplayTool.STATUS_EXTRACTING_LOCAL_AOI,
+    curr_state=ReplayTool.STATUS_DETECTING_CONFLICTS
 )
-def filter_referenced_elements():
+def filter_referenced_elements_and_detect_conflicts():
     aoi_path = get_aoi_path()
     local_aoi_path = os.path.join(aoi_path, 'local_aoi.osm')
     current_aoi_path = os.path.join(aoi_path, 'current_aoi.osm')
@@ -237,5 +237,5 @@ def task_prepare_data_for_replay_tool():
     logger.info("Got local aoi extract")
 
     logger.info("Filtering referenced elements")
-    filter_referenced_elements()
+    filter_referenced_elements_and_detect_conflicts()
     logger.info("Filtered referenced elements")

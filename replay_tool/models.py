@@ -8,7 +8,7 @@ class ReplayTool(models.Model):
     STATUS_GATHERING_CHANGESETS = 'gathering_changesets'  # Step 1
     STATUS_EXTRACTING_UPSTREAM_AOI = 'extracting_upstream_aoi'  # Step 2
     STATUS_EXTRACTING_LOCAL_AOI = 'extracting_local_aoi'  # Step 3
-    STATUS_FILTERING_REFERENCED_OSM_ELEMENTS = 'filtering_referenced_osm_elements'  # Step 4
+    STATUS_DETECTING_CONFLICTS = 'detecting_conflicts'  # Step 4
     STATUS_CONFLICTS = 'conflicts'
     STATUS_RESOLVED = 'resolved'
     STATUS_PUSH_CONFLICTS = 'push_conflicts'
@@ -19,22 +19,22 @@ class ReplayTool(models.Model):
         (STATUS_GATHERING_CHANGESETS, 'Gathering Changesets'),
         (STATUS_EXTRACTING_LOCAL_AOI, 'Extracting Local Aoi'),
         (STATUS_EXTRACTING_UPSTREAM_AOI, 'Extracting Upstream Aoi'),
-        (STATUS_FILTERING_REFERENCED_OSM_ELEMENTS, 'Filtering referenced osm elements'),
+        (STATUS_DETECTING_CONFLICTS, 'Detecting Conflicts'),
         (STATUS_CONFLICTS, 'Conflicts'),
         (STATUS_RESOLVED, 'Resolved'),
         (STATUS_PUSH_CONFLICTS, 'Push Conflicts'),
         (STATUS_PUSHED_UPSTREAM, 'Pushed Upstream'),
     )
 
-    status = models.CharField(
+    state = models.CharField(
         max_length=100,
         choices=CHOICES_STATUS,
         default=STATUS_NOT_TRIGGERRED,
     )
-    current_state_completed = models.BooleanField(default=False)
+    is_current_state_complete = models.BooleanField(default=False)
 
-    # This will help us know at which step did it errorred by looking at status
-    errorred = models.BooleanField(default=False)
+    # This will help us know at which step did it errored by looking at status
+    has_errored = models.BooleanField(default=False)
 
     def __str__(self):
         return self.status
@@ -44,8 +44,8 @@ class ReplayTool(models.Model):
     def reset(cls, status=STATUS_NOT_TRIGGERRED):
         r, _ = cls.objects.get_or_create()
         r.status = status
-        r.current_state_completed = True
-        r.errorred = False
+        r.is_current_state_complete = True
+        r.has_errored = False
         # Delete other items
         LocalChangeSet.objects.all().delete()
         ConflictingNode.objects.all().delete()
@@ -79,8 +79,6 @@ class LocalChangeSet(models.Model):
     )
 
     def __str__(self):
-        # TODO: REMOVE THIS
-        from .tasks import get_aoi_path
         return f'Local Changeset # {self.changeset_id}'
 
 
