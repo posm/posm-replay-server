@@ -27,7 +27,7 @@ class ReplayTool(models.Model):
     )
 
     status = models.CharField(
-        max_length=20,
+        max_length=100,
         choices=CHOICES_STATUS,
         default=STATUS_NOT_TRIGGERRED,
     )
@@ -46,6 +46,11 @@ class ReplayTool(models.Model):
         r.status = status
         r.current_state_completed = True
         r.errorred = False
+        # Delete other items
+        LocalChangeSet.objects.all().delete()
+        ConflictingNode.objects.all().delete()
+        ConflictingWay.objects.all().delete()
+        ConflictingRelation.objects.all().delete()
         r.save()
 
     def save(self, *args, **kwargs):

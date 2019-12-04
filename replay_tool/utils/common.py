@@ -70,13 +70,17 @@ def filter_elements_from_tracker(item, tracker) -> Callable[[dict, Tuple[int, ob
     def filter_func(acc: dict, id_elem: Tuple[int, object]) -> dict:
         # id_elem is from local/upstream aoi
         eid, elem = id_elem
+        acc['added'] = acc.get('added', {})
+        acc['modified'] = acc.get('modified', {})
+        acc['deleted'] = acc.get('deleted', {})
+        acc['referenced'] = acc.get('referenced', {})
         if eid in tracker.added_elements[item]:
             acc['added'][eid] = elem
-        elif eid in tracker.modified_elements['elems']:
+        elif eid in tracker.modified_elements[item]:
             acc['modified'][eid] = elem
-        elif eid in tracker.deleted_elements['elems']:
+        elif eid in tracker.deleted_elements[item]:
             acc['deleted'][eid] = elem
-        if eid in tracker.referenced_elements['elems']:
+        if eid in tracker.referenced_elements[item]:
             acc['referenced'][eid] = elem
         return acc
     return filter_func
@@ -88,17 +92,17 @@ def filter_elements_from_aoi_handler(tracker, aoi_handler) -> FilteredElements:
 
     elements['nodes'] = reduce(
         filter_elements_from_tracker('nodes', tracker),
-        aoi_handler.nodes,
+        aoi_handler.nodes.items(),
         {}
     )
     elements['ways'] = reduce(
         filter_elements_from_tracker('ways', tracker),
-        aoi_handler.ways,
+        aoi_handler.ways.items(),
         {}
     )
     elements['relations'] = reduce(
         filter_elements_from_tracker('relations', tracker),
-        aoi_handler.relations,
+        aoi_handler.relations.items(),
         {}
     )
     return elements

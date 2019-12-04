@@ -31,7 +31,10 @@ def set_error_status_on_exception(prev_status=None, curr_status=None):
             except Exception:
                 replay_tool.errorred = True
                 replay_tool.save()
-                logger.error(f'Error during {curr_status}', exec_info=True)
+                logger.error(f'Error during {curr_status}', exc_info=True)
+                import traceback
+                print(traceback.format_exc())
+                print(f'Error during {curr_status}')
                 return False
         return wrapper
     return decorator

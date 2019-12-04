@@ -164,7 +164,9 @@ def track_elements_from_local_changesets():
     for changeset in LocalChangeSet.objects.all():
         # Create named temp file
         tf = tempfile.NamedTemporaryFile(suffix='.osc')
-        tf.write(changeset.changeset_data)
+        print('CHANGESET', changeset.changeset_data)
+        tf.write(changeset.changeset_data.encode('utf-8'))
+        tf.seek(0)
         filter_handler = ElementsFilterHandler(tracker)
         filter_handler.apply_file(tf.name)
 
@@ -199,12 +201,12 @@ def filter_referenced_elements():
     for item, elems in local_added_elements.items():
         for elem in elems:
             modelClass = ITEM_CLASS_MAP[item]
-            modelClass.objects.create(local_data=elem, status=modelClass.LOCAL_ACTION_ADDED)
+            modelClass.objects.create(local_data=elem, local_action=modelClass.LOCAL_ACTION_ADDED)
 
     for item, elems in local_deleted_elements.items():
         for elem in elems:
             modelClass = ITEM_CLASS_MAP[item]
-            modelClass.objects.create(local_data=elem, status=modelClass.LOCAL_ACTION_DELETED)
+            modelClass.objects.create(local_data=elem, local_action=modelClass.LOCAL_ACTION_DELETED)
 
     conflicting_elements: ConflictingElements = get_conflicting_elements(
         local_referenced_elements, aoi_referenced_elements
