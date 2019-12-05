@@ -32,8 +32,6 @@ def set_error_status_on_exception(prev_state=None, curr_state=None):
                 replay_tool.has_errored = True
                 replay_tool.save()
                 logger.error(f'Error during {curr_state}', exc_info=True)
-                import traceback
-                print(traceback.format_exc())
                 print(f'Error during {curr_state}')
                 return False
         return wrapper

@@ -40,7 +40,6 @@ class ReplayTool(models.Model):
         return self.status
 
     @classmethod
-    @transaction.atomic
     def reset(cls, state=STATUS_NOT_TRIGGERRED):
         r, _ = cls.objects.get_or_create()
         r.state = state
@@ -107,10 +106,10 @@ class ConflictingOSMElement(models.Model):
 
 
 class ConflictingNode(ConflictingOSMElement):
-    node_id = models.PositiveIntegerField(unique=True)
+    node_id = models.BigIntegerField(unique=True)
 
     def __str__(self):
-        status = 'Resolved' if self.resolved else 'Conflicting'
+        status = 'Resolved' if self.is_resolved else 'Conflicting'
         return f'Node {self.node_id}: {status}'
 
     @classmethod
@@ -126,7 +125,7 @@ class ConflictingNode(ConflictingOSMElement):
 
 
 class ConflictingWay(ConflictingOSMElement):
-    way_id = models.PositiveIntegerField(unique=True)
+    way_id = models.BigIntegerField(unique=True)
 
     def __str__(self):
         status = 'Resolved' if self.resolved else 'Conflicting'
@@ -145,7 +144,7 @@ class ConflictingWay(ConflictingOSMElement):
 
 
 class ConflictingRelation(ConflictingOSMElement):
-    relation_id = models.PositiveIntegerField(unique=True)
+    relation_id = models.BigIntegerField(unique=True)
 
     def __str__(self):
         status = 'Resolved' if self.resolved else 'Conflicting'

@@ -5,8 +5,6 @@ import tempfile
 
 import psycopg2
 
-from django.db import transaction
-
 from .models import (
     ReplayTool, LocalChangeSet, ConflictingNode,
     ConflictingWay, ConflictingRelation,
@@ -51,6 +49,12 @@ ITEM_SERIALIZER_MAP = {
     'nodes': NodeSerializer,
     'ways': WaySerializer,
     'relations': RelationSerializer,
+}
+
+ITEM_ID_PARAM = {
+    'nodes': lambda x: {'node_id': x},
+    'ways': lambda x: {'way_id': x},
+    'relations': lambda x: {'relation_id': x},
 }
 
 
@@ -180,7 +184,6 @@ def track_elements_from_local_changesets():
     return tracker
 
 
-@transaction.atomic
 @set_error_status_on_exception(
     prev_state=ReplayTool.STATUS_EXTRACTING_LOCAL_AOI,
     curr_state=ReplayTool.STATUS_DETECTING_CONFLICTS
@@ -197,9 +200,9 @@ def filter_referenced_elements_and_detect_conflicts():
     current_aoi_handler = AOIHandler()
     current_aoi_handler.apply_file(current_aoi_path)
 
-    aoi_referenced_elements: FilteredElements = filter_elements_from_aoi_handler(tracker, current_aoi_handler)
+    aoi_elements: FilteredElements = filter_elements_from_aoi_handler(tracker, current_aoi_handler)
 
-    local_referenced_elements: FilteredElements = filter_elements_from_aoi_handler(tracker, local_aoi_handler)
+    local_elements: FilteredElements = filter_elements_from_aoi_handler(tracker, local_aoi_handler)
 
     local_added_elements = tracker.get_added_elements(local_aoi_handler)
     local_deleted_elements = tracker.get_deleted_elements(local_aoi_handler)
@@ -207,23 +210,25 @@ def filter_referenced_elements_and_detect_conflicts():
     for item, elems in local_added_elements.items():
         for elem in elems:
             modelClass = ITEM_CLASS_MAP[item]
-            serializerClass = ITEM_SERIALIZER_MAP[item]
+            id_name_param = ITEM_ID_PARAM[item]
             modelClass.objects.create(
-                local_data=serializerClass(elem).data,
-                local_action=modelClass.LOCAL_ACTION_ADDED
+                local_data=elem,
+                local_action=modelClass.LOCAL_ACTION_ADDED,
+                **id_name_param(elem['id'])
             )
 
     for item, elems in local_deleted_elements.items():
         for elem in elems:
             modelClass = ITEM_CLASS_MAP[item]
-            serializerClass = ITEM_SERIALIZER_MAP[item]
+            id_name_param = ITEM_ID_PARAM[item]
             modelClass.objects.create(
-                local_data=serializerClass(elem).data,
-                local_action=modelClass.LOCAL_ACTION_DELETED
+                local_data=elem,
+                local_action=modelClass.LOCAL_ACTION_DELETED,
+                **id_name_param(elem['id'])
             )
 
     conflicting_elements: ConflictingElements = get_conflicting_elements(
-        local_referenced_elements, aoi_referenced_elements
+        local_elements['referenced'], aoi_elements['referenced']
     )
 
     for item, conflicting_items in conflicting_elements.items():

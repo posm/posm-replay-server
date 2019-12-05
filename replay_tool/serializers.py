@@ -17,25 +17,46 @@ class LocationSerializer(serializers.Serializer):
     y = serializers.IntegerField()
 
 
-class TagSerializer(serializers.Serializer):
-    k = serializers.CharField()
-    v = serializers.CharField()
+class TagSerializer:
+    def __init__(self, elem, many=False):
+        self.many = many
+        self.elem = elem
+
+    @property
+    def data(self):
+        if self.many:
+            return [{'k': x.k, 'v': x.v} for x in self.elem]
+        return {'k': self.elem.k, 'v': self.elem.v}
 
 
-class BaseElementSerializer(serializers.Serializer):
-    id = serializers.IntegerField()
-    version = serializers.IntegerField()
-    changeset = serializers.IntegerField()
-    deleted = serializers.BooleanField()
-    timestamp = serializers.DateTimeField()
-    uid = serializers.IntegerField()
-    user = serializers.CharField()
-    tags = TagSerializer(many=True)
-    visible = serializers.BooleanField()
+class BaseElementSerializer:
+    def __init__(self, elem, many=False):
+        self.many = many
+        self.elem = elem
+
+    @classmethod
+    def single(cls, elem):
+        return {
+            'id': elem.id,
+            'version': elem.version,
+            'changeset': elem.changeset,
+            'deleted': elem.deleted,
+            'timestamp': str(elem.timestamp),
+            'uid': elem.uid,
+            # 'user': elem.user,
+            'tags': TagSerializer(elem.tags, many=True).data,
+            'visible': elem.visible
+        }
+
+    @property
+    def data(self):
+        if self.many:
+            return [self.single(x) for x in self.elem]
+        return self.single(self.elem)
 
 
 class NodeSerializer(BaseElementSerializer):
-    location = LocationSerializer()
+    pass
 
 
 class NodeRefSerializer(serializers.Serializer):
