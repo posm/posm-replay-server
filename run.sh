@@ -3,7 +3,7 @@
 # Run docker
 # check if docker-compose-prod exists
 if [ -f docker-compose-prod.yml ]; then
-    docker_flag=-f docker-compose-prod.yml
+    docker_flag='-f docker-compose-prod.yml'
 else
     docker_flag=
 fi

@@ -195,9 +195,9 @@ def filter_referenced_elements_and_detect_conflicts():
 
     tracker = track_elements_from_local_changesets()
 
-    local_aoi_handler = AOIHandler()
+    local_aoi_handler = AOIHandler(tracker)
     local_aoi_handler.apply_file(local_aoi_path)
-    current_aoi_handler = AOIHandler()
+    current_aoi_handler = AOIHandler(tracker)
     current_aoi_handler.apply_file(current_aoi_path)
 
     aoi_elements: FilteredElements = filter_elements_from_aoi_handler(tracker, current_aoi_handler)

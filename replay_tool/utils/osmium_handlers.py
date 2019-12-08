@@ -7,20 +7,24 @@ class AOIHandler(osmium.SimpleHandler):
     """
     Stores AOI elements as keys values pair.
     """
-    def __init__(self):
+    def __init__(self, tracker):
         super().__init__()
+        self.tracker = tracker
         self.nodes: dict = {}
         self.ways: dict = {}
         self.relations: dict = {}
 
     def node(self, n):
-        self.nodes[n.id] = NodeSerializer(n).data
+        if n.id in self.tracker.referenced_elements['nodes'] or n.id in self.tracker.added_elements['nodes']:
+            self.nodes[n.id] = NodeSerializer(n).data
 
     def way(self, w):
-        self.ways[w.id] = WaySerializer(w).data
+        if w.id in self.tracker.referenced_elements['ways'] or w.id in self.tracker.added_elements['ways']:
+            self.ways[w.id] = WaySerializer(w).data
 
     def relation(self, r):
-        self.relations[r.id] = RelationSerializer(r).data
+        if r.id in self.tracker.referenced_elements['relations'] or r.id in self.tracker.added_elements['relations']:
+            self.relations[r.id] = RelationSerializer(r).data
 
 
 class OSMElementsTracker:
