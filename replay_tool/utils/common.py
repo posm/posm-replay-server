@@ -1,16 +1,18 @@
 import os
+import json
 from functools import reduce
+from datetime import datetime
 
 from replay_tool.serializers import NodeSerializer, WaySerializer, RelationSerializer
 
-from typing import Any, Callable, Tuple, List
+from typing import Any, Callable, Tuple, List, Optional
 from mypy_extensions import TypedDict
 
 
 class FilteredElements(TypedDict):
-    nodes: Any
-    relations: Any
-    ways: Any
+    referenced: Any
+    deleted: Any
+    modified: Any
 
 
 class ConflictingElements(TypedDict):
@@ -19,12 +21,36 @@ class ConflictingElements(TypedDict):
     relations: List[Tuple[object, object]]
 
 
+def get_aoi_name(exception_if_not_set=False) -> Optional[str]:
+    aoi_name = os.environ.get('AOI_NAME')
+    if exception_if_not_set and not aoi_name:
+        raise Exception('AOI_ROOT and AOI_NAME must both be defined in env')
+    return aoi_name
+
+
+def get_aoi_created_datetime() -> datetime:
+    aoi_path = get_aoi_path()
+    return datetime.utcfromtimestamp(os.path.getctime(aoi_path))
+
+
 def get_aoi_path() -> str:
     aoi_root = os.environ.get('AOI_ROOT')
-    aoi_name = os.environ.get('AOI_NAME')
+    aoi_name = get_aoi_name()
     if not aoi_root or not aoi_name:
         raise Exception('AOI_ROOT and AOI_NAME must both be defined in env')
     return os.path.join(aoi_root, aoi_name)
+
+
+def get_current_aoi_bbox() -> List[float]:
+    aoi_path = get_aoi_path()
+    manifest_path = os.path.join(aoi_path, 'manifest.json')
+
+    # TODO: Check if manifest file exists
+    with open(manifest_path) as f:
+        manifest = json.load(f)
+        bbox = manifest['bbox']
+        # bbox is of the form [w, s, e, n]
+        return bbox
 
 
 def get_local_aoi_path() -> str:
@@ -39,42 +65,33 @@ def get_overpass_query(s, w, n, e) -> str:
     return f'(node({s},{w},{n},{e});<;>>;>;);out meta;'
 
 
-def filter_elements_from_tracker(item, tracker) -> Callable[[dict, Tuple[int, object]], dict]:
-    """This function is used inside reducer to filter item[nodes/ways/relations]"""
-    def filter_func(acc: dict, id_elem: Tuple[int, object]) -> dict:
-        # id_elem is from local/upstream aoi
-        eid, elem = id_elem
-        if eid in tracker.added_elements[item]:
-            acc['added'][eid] = elem
-        elif eid in tracker.modified_elements['elems']:
-            acc['modified'][eid] = elem
-        elif eid in tracker.deleted_elements['elems']:
-            acc['deleted'][eid] = elem
-        if eid in tracker.referenced_elements['elems']:
-            acc['referenced'][eid] = elem
-        return acc
-    return filter_func
-
-
 def filter_elements_from_aoi_handler(tracker, aoi_handler) -> FilteredElements:
     """This function is used inside reducer to filter osm elements"""
-    elements: FilteredElements = {'nodes': {}, 'relations': {}, 'ways': {}}
+    elements: FilteredElements = {
+        'referenced': {'nodes': {}, 'ways': {}, 'relations': {}},
+        'modified': {'nodes': {}, 'ways': {}, 'relations': {}},
+        'deleted': {'nodes': {}, 'ways': {}, 'relations': {}},
+    }
+    for nid in tracker.deleted_elements['nodes']:
+        elements['deleted']['nodes'][nid] = aoi_handler.nodes[nid]
+    for nid in tracker.referenced_elements['nodes']:
+        elements['referenced']['nodes'][nid] = aoi_handler.nodes[nid]
+    for nid in tracker.modified_elements['nodes']:
+        elements['modified']['nodes'][nid] = aoi_handler.nodes[nid]
 
-    elements['nodes'] = reduce(
-        filter_elements_from_tracker('nodes', tracker),
-        aoi_handler.nodes,
-        {}
-    )
-    elements['ways'] = reduce(
-        filter_elements_from_tracker('ways', tracker),
-        aoi_handler.ways,
-        {}
-    )
-    elements['relations'] = reduce(
-        filter_elements_from_tracker('relations', tracker),
-        aoi_handler.relations,
-        {}
-    )
+    for nid in tracker.deleted_elements['ways']:
+        elements['deleted']['ways'][nid] = aoi_handler.ways[nid]
+    for nid in tracker.referenced_elements['ways']:
+        elements['referenced']['ways'][nid] = aoi_handler.ways[nid]
+    for nid in tracker.modified_elements['ways']:
+        elements['modified']['ways'][nid] = aoi_handler.ways[nid]
+
+    for nid in tracker.deleted_elements['relations']:
+        elements['deleted']['relations'][nid] = aoi_handler.relations[nid]
+    for nid in tracker.referenced_elements['relations']:
+        elements['referenced']['relations'][nid] = aoi_handler.relations[nid]
+    for nid in tracker.modified_elements['relations']:
+        elements['modified']['relations'][nid] = aoi_handler.relations[nid]
     return elements
 
 
@@ -135,7 +152,7 @@ def do_elements_conflict(element1_serialized: dict, element2_serialized: dict) -
     return e1_members_keyvals != e2_members_keyvals
 
 
-def filter_conflicting_pairs(local_referenced_elements, aoi_referenced_elements, Serializer):
+def filter_conflicting_pairs(local_referenced_elements, aoi_referenced_elements):
     """
     Returns [(serialized_local_element1, seriaalized_aoi_element1), ...] of conflicting elements
     """
@@ -144,10 +161,8 @@ def filter_conflicting_pairs(local_referenced_elements, aoi_referenced_elements,
         # NOTE: Assumption that l_nid is always present in aoi_referenced_elements
         # which is a very valid assumption
         aoi_element = aoi_referenced_elements[l_nid]
-        serialized_aoi_element = Serializer(aoi_element).data
-        serialized_local_element = Serializer(local_element).data
-        if do_elements_conflict(serialized_local_element, serialized_aoi_element):
-            conflicting_elements.append((serialized_local_element, serialized_aoi_element))
+        if do_elements_conflict(aoi_element, local_element):
+            conflicting_elements.append((local_element, aoi_element))
     return conflicting_elements
 
 
@@ -156,17 +171,14 @@ def get_conflicting_elements(local_referenced_elements, aoi_referenced_elements)
         'nodes': filter_conflicting_pairs(
             local_referenced_elements['nodes'],
             aoi_referenced_elements['nodes'],
-            NodeSerializer,
         ),
         'ways': filter_conflicting_pairs(
             local_referenced_elements['ways'],
             aoi_referenced_elements['ways'],
-            WaySerializer,
         ),
         'relations': filter_conflicting_pairs(
             local_referenced_elements['relations'],
             aoi_referenced_elements['relations'],
-            RelationSerializer,
         ),
     }
     return conflicting_elems

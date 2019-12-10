@@ -11,9 +11,11 @@ uwsgi
 mock==3.0.5
 osmium==2.15.3
 
-# mypy==0.740
-# mypy-extensions==0.4.3
-# django-stubs==1.2.0
+ipython==7.10.1
+
+mypy==0.740
+mypy-extensions==0.4.3
+django-stubs==1.2.0
 
 # Django autofixture
 # git+https://github.com/volrath/django-autofixture.git

@@ -1,19 +1,16 @@
 import requests
 import time
 import os
-import json
-
 import tempfile
 
 import psycopg2
-
-from django.db import transaction
 
 from .models import (
     ReplayTool, LocalChangeSet, ConflictingNode,
     ConflictingWay, ConflictingRelation,
 )
 
+from .serializers import NodeSerializer, WaySerializer, RelationSerializer
 from .utils.decorators import set_error_status_on_exception
 from .utils.osm_api import get_changeset_data, get_changeset_meta
 from .utils.osmium_handlers import (
@@ -23,6 +20,7 @@ from .utils.osmium_handlers import (
 )
 from .utils.common import (
     get_aoi_path,
+    get_current_aoi_bbox,
     get_current_aoi_path,
     get_overpass_query,
     filter_elements_from_aoi_handler,
@@ -45,6 +43,18 @@ ITEM_CLASS_MAP = {
     'nodes': ConflictingNode,
     'ways': ConflictingWay,
     'relations': ConflictingRelation,
+}
+
+ITEM_SERIALIZER_MAP = {
+    'nodes': NodeSerializer,
+    'ways': WaySerializer,
+    'relations': RelationSerializer,
+}
+
+ITEM_ID_PARAM = {
+    'nodes': lambda x: {'node_id': x},
+    'ways': lambda x: {'way_id': x},
+    'relations': lambda x: {'relation_id': x},
 }
 
 
@@ -87,8 +97,8 @@ def collect_changesets_from_apidb(first_changeset_id):
 
 
 @set_error_status_on_exception(
-    prev_status=ReplayTool.STATUS_NOT_TRIGGERRED,
-    curr_status=ReplayTool.STATUS_GATHERING_CHANGESETS
+    prev_state=ReplayTool.STATUS_NOT_TRIGGERRED,
+    curr_state=ReplayTool.STATUS_GATHERING_CHANGESETS
 )
 def gather_changesets():
     try:
@@ -106,8 +116,8 @@ def gather_changesets():
 
 
 @set_error_status_on_exception(
-    prev_status=ReplayTool.STATUS_EXTRACTING_UPSTREAM_AOI,
-    curr_status=ReplayTool.STATUS_EXTRACTING_LOCAL_AOI
+    prev_state=ReplayTool.STATUS_EXTRACTING_UPSTREAM_AOI,
+    curr_state=ReplayTool.STATUS_EXTRACTING_LOCAL_AOI
 )
 def get_local_aoi_extract():
     db_user = os.environ.get('POSM_DB_USER')
@@ -146,18 +156,11 @@ def get_local_aoi_extract():
 
 
 @set_error_status_on_exception(
-    prev_status=ReplayTool.STATUS_GATHERING_CHANGESETS,
-    curr_status=ReplayTool.STATUS_EXTRACTING_UPSTREAM_AOI
+    prev_state=ReplayTool.STATUS_GATHERING_CHANGESETS,
+    curr_state=ReplayTool.STATUS_EXTRACTING_UPSTREAM_AOI
 )
 def get_current_aoi_extract():
-    aoi_path = get_aoi_path()
-    manifest_path = os.path.join(aoi_path, 'manifest.json')
-
-    # TODO: Check if manifest file exists
-    with open(manifest_path) as f:
-        manifest = json.load(f)
-        [w, s, e, n] = manifest['bbox']
-
+    [w, s, e, n] = get_current_aoi_bbox()
     overpass_query = get_overpass_query(s, w, n, e)
     response = requests.get(OVERPASS_API_URL, data={'data': overpass_query})
 
@@ -172,7 +175,8 @@ def track_elements_from_local_changesets():
     for changeset in LocalChangeSet.objects.all():
         # Create named temp file
         tf = tempfile.NamedTemporaryFile(suffix='.osc')
-        tf.write(changeset.changeset_data)
+        tf.write(changeset.changeset_data.encode('utf-8'))
+        tf.seek(0)
         filter_handler = ElementsFilterHandler(tracker)
         filter_handler.apply_file(tf.name)
 
@@ -180,26 +184,25 @@ def track_elements_from_local_changesets():
     return tracker
 
 
-@transaction.atomic
 @set_error_status_on_exception(
-    prev_status=ReplayTool.STATUS_EXTRACTING_LOCAL_AOI,
-    curr_status=ReplayTool.STATUS_FILTERING_REFERENCED_OSM_ELEMENTS
+    prev_state=ReplayTool.STATUS_EXTRACTING_LOCAL_AOI,
+    curr_state=ReplayTool.STATUS_DETECTING_CONFLICTS
 )
-def filter_referenced_elements():
+def filter_referenced_elements_and_detect_conflicts():
     aoi_path = get_aoi_path()
     local_aoi_path = os.path.join(aoi_path, 'local_aoi.osm')
     current_aoi_path = os.path.join(aoi_path, 'current_aoi.osm')
 
     tracker = track_elements_from_local_changesets()
 
-    local_aoi_handler = AOIHandler()
+    local_aoi_handler = AOIHandler(tracker)
     local_aoi_handler.apply_file(local_aoi_path)
-    current_aoi_handler = AOIHandler()
+    current_aoi_handler = AOIHandler(tracker)
     current_aoi_handler.apply_file(current_aoi_path)
 
-    aoi_referenced_elements: FilteredElements = filter_elements_from_aoi_handler(tracker, current_aoi_handler)
+    aoi_elements: FilteredElements = filter_elements_from_aoi_handler(tracker, current_aoi_handler)
 
-    local_referenced_elements: FilteredElements = filter_elements_from_aoi_handler(tracker, local_aoi_handler)
+    local_elements: FilteredElements = filter_elements_from_aoi_handler(tracker, local_aoi_handler)
 
     local_added_elements = tracker.get_added_elements(local_aoi_handler)
     local_deleted_elements = tracker.get_deleted_elements(local_aoi_handler)
@@ -207,15 +210,25 @@ def filter_referenced_elements():
     for item, elems in local_added_elements.items():
         for elem in elems:
             modelClass = ITEM_CLASS_MAP[item]
-            modelClass.objects.create(local_data=elem, status=modelClass.LOCAL_ACTION_ADDED)
+            id_name_param = ITEM_ID_PARAM[item]
+            modelClass.objects.create(
+                local_data=elem,
+                local_action=modelClass.LOCAL_ACTION_ADDED,
+                **id_name_param(elem['id'])
+            )
 
     for item, elems in local_deleted_elements.items():
         for elem in elems:
             modelClass = ITEM_CLASS_MAP[item]
-            modelClass.objects.create(local_data=elem, status=modelClass.LOCAL_ACTION_DELETED)
+            id_name_param = ITEM_ID_PARAM[item]
+            modelClass.objects.create(
+                local_data=elem,
+                local_action=modelClass.LOCAL_ACTION_DELETED,
+                **id_name_param(elem['id'])
+            )
 
     conflicting_elements: ConflictingElements = get_conflicting_elements(
-        local_referenced_elements, aoi_referenced_elements
+        local_elements['referenced'], aoi_elements['referenced']
     )
 
     for item, conflicting_items in conflicting_elements.items():
@@ -243,5 +256,5 @@ def task_prepare_data_for_replay_tool():
     logger.info("Got local aoi extract")
 
     logger.info("Filtering referenced elements")
-    filter_referenced_elements()
+    filter_referenced_elements_and_detect_conflicts()
     logger.info("Filtered referenced elements")

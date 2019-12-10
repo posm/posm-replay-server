@@ -1,6 +1,15 @@
 from rest_framework import serializers
 
 
+from replay_tool.models import ReplayTool
+
+
+class ReplayToolSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReplayTool
+        fields = '__all__'
+
+
 class LocationSerializer(serializers.Serializer):
     lat = serializers.FloatField()
     lon = serializers.FloatField()
@@ -18,10 +27,10 @@ class BaseElementSerializer(serializers.Serializer):
     version = serializers.IntegerField()
     changeset = serializers.IntegerField()
     deleted = serializers.BooleanField()
-    timestamp = serializers.DateTimeField()
+    timestamp = serializers.CharField()
     uid = serializers.IntegerField()
-    user = serializers.CharField()
     tags = TagSerializer(many=True)
+    user = serializers.CharField()
     visible = serializers.BooleanField()
 
 

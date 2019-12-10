@@ -1,24 +1,30 @@
 import osmium
 
+from replay_tool.serializers import NodeSerializer, WaySerializer, RelationSerializer
+
 
 class AOIHandler(osmium.SimpleHandler):
     """
     Stores AOI elements as keys values pair.
     """
-    def __init__(self):
+    def __init__(self, tracker):
         super().__init__()
+        self.tracker = tracker
         self.nodes: dict = {}
         self.ways: dict = {}
         self.relations: dict = {}
 
     def node(self, n):
-        self.nodes[n.id] = n
+        if n.id in self.tracker.referenced_elements['nodes'] or n.id in self.tracker.added_elements['nodes']:
+            self.nodes[n.id] = NodeSerializer(n).data
 
     def way(self, w):
-        self.ways[w.id] = w
+        if w.id in self.tracker.referenced_elements['ways'] or w.id in self.tracker.added_elements['ways']:
+            self.ways[w.id] = WaySerializer(w).data
 
     def relation(self, r):
-        self.relations[r.id] = r
+        if r.id in self.tracker.referenced_elements['relations'] or r.id in self.tracker.added_elements['relations']:
+            self.relations[r.id] = RelationSerializer(r).data
 
 
 class OSMElementsTracker:
@@ -42,48 +48,39 @@ class OSMElementsTracker:
     def get_added_elements(self, aoi_handler):
         return {
             'nodes': [
-                v for k, v in aoi_handler.nodes.items()
-                if k in self.added_elements['nodes']
+                aoi_handler.nodes[k] for k in self.added_elements['nodes']
             ],
             'ways': [
-                v for k, v in aoi_handler.ways.items()
-                if k in self.added_elements['ways']
+                aoi_handler.ways[k] for k in self.added_elements['ways']
             ],
             'relations': [
-                v for k, v in aoi_handler.relations.items()
-                if k in self.added_elements['relations']
+                aoi_handler.relations[k] for k in self.added_elements['relations']
             ],
         }
 
     def get_deleted_elements(self, aoi_handler):
         return {
             'nodes': [
-                v for k, v in aoi_handler.nodes.items()
-                if k in self.deleted_elements['nodes']
+                aoi_handler.nodes[k] for k in self.deleted_elements['nodes']
             ],
             'ways': [
-                v for k, v in aoi_handler.ways.items()
-                if k in self.deleted_elements['ways']
+                aoi_handler.ways[k] for k in self.deleted_elements['ways']
             ],
             'relations': [
-                v for k, v in aoi_handler.relations.items()
-                if k in self.deleted_elements['relations']
+                aoi_handler.relations[k] for k in self.deleted_elements['relations']
             ],
         }
 
     def get_modified_elements(self, aoi_handler):
         return {
             'nodes': [
-                v for k, v in aoi_handler.nodes.items()
-                if k in self.modified_elements['nodes']
+                aoi_handler.nodes[k] for k in self.modified_elements['nodes']
             ],
             'ways': [
-                v for k, v in aoi_handler.ways.items()
-                if k in self.modified_elements['ways']
+                aoi_handler.ways[k] for k in self.modified_elements['ways']
             ],
             'relations': [
-                v for k, v in aoi_handler.relations.items()
-                if k in self.modified_elements['relations']
+                aoi_handler.relations[k] for k in self.modified_elements['relations']
             ],
         }
 
