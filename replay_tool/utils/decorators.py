@@ -25,6 +25,7 @@ def set_error_status_on_exception(prev_state=None, curr_state=None):
 
             try:
                 f(*args, **kwargs)
+                replay_tool = ReplayTool.objects.get()
                 replay_tool.is_current_state_complete = True
                 replay_tool.save()
                 return True

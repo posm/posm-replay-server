@@ -36,6 +36,8 @@ class ReplayTool(models.Model):
     # This will help us know at which step did it errored by looking at status
     has_errored = models.BooleanField(default=False)
 
+    elements_data = JSONField(default=dict)
+
     def __str__(self):
         return self.status
 
@@ -44,6 +46,7 @@ class ReplayTool(models.Model):
         r, _ = cls.objects.get_or_create()
         r.state = state
         r.is_current_state_complete = True
+        r.elements_data = dict()
         r.has_errored = False
         # Delete other items
         LocalChangeSet.objects.all().delete()
@@ -92,7 +95,7 @@ class ConflictingOSMElement(models.Model):
         (LOCAL_ACTION_MODIFIED, 'Modified'),
     )
     local_data = JSONField(default=dict)
-    aoi_data = JSONField(default=dict)
+    upstream_data = JSONField(default=dict)
     resolved_data = JSONField(default=dict, null=True, blank=True)
     is_resolved = models.BooleanField(default=False)
     local_action = models.CharField(
@@ -119,9 +122,23 @@ class ConflictingNode(ConflictingOSMElement):
             cls.objects.create(
                 node_id=loc['id'],
                 local_data=loc,
-                aoi_data=aoi,
+                upstream_data=aoi,
                 **kwargs
             )
+
+    @property
+    def local_geojson(self):
+        # GeoJSON is cached
+        if not hasattr(self, '_local_geojson'):
+            self._local_geojson = get_node_geojson(self.local_data)
+        return self._geojson
+
+    @property
+    def upstream_geojson(self):
+        # GeoJSON is cached
+        if not hasattr(self, '_upstream_geojson'):
+            self._local_geojson = get_node_geojson(self.upstream_data)
+        return self._geojson
 
 
 class ConflictingWay(ConflictingOSMElement):
@@ -138,9 +155,23 @@ class ConflictingWay(ConflictingOSMElement):
             cls.objects.create(
                 way_id=loc['id'],
                 local_data=loc,
-                aoi_data=aoi,
+                upstream_data=aoi,
                 **kwargs
             )
+
+    @property
+    def local_geojson(self):
+        # GeoJSON is cached
+        if not hasattr(self, '_local_geojson'):
+            self._local_geojson = get_way_geojson(self.local_data)
+        return self._geojson
+
+    @property
+    def upstream_geojson(self):
+        # GeoJSON is cached
+        if not hasattr(self, '_upstream_geojson'):
+            self._local_geojson = get_way_geojson(self.upstream_data)
+        return self._geojson
 
 
 class ConflictingRelation(ConflictingOSMElement):
@@ -157,6 +188,48 @@ class ConflictingRelation(ConflictingOSMElement):
             cls.objects.create(
                 relation_id=loc['id'],
                 local_data=loc,
-                aoi_data=aoi,
+                upstream_data=aoi,
                 **kwargs
             )
+
+    @property
+    def local_geojson(self):
+        # GeoJSON is cached
+        if not hasattr(self, '_local_geojson'):
+            self._local_geojson = get_relation_geojson(self.local_data)
+        return self._geojson
+
+    @property
+    def upstream_geojson(self):
+        # GeoJSON is cached
+        if not hasattr(self, '_upstream_geojson'):
+            self._local_geojson = get_relation_geojson(self.upstream_data)
+        return self._geojson
+
+
+def get_node_geojson(data):
+    if not data:
+        return {}
+    location = data['location']
+    return {
+        'type': 'Feature',
+        'geometry': {
+            'type': 'Point',
+            'coordinates': [location['lat'], location['lon']],
+        },
+        'properties': {
+            k: v for k, v in data.items() if k != 'location'
+        }
+    }
+
+
+def get_way_geojson(data):
+    if not data:
+        return {}
+    return {}
+
+
+def get_relation_geojson(data):
+    if not data:
+        return {}
+    return {}

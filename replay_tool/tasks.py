@@ -16,7 +16,8 @@ from .utils.osm_api import get_changeset_data, get_changeset_meta
 from .utils.osmium_handlers import (
     OSMElementsTracker,
     ElementsFilterHandler,
-    AOIHandler
+    AOIHandler,
+    CounterHandler,
 )
 from .utils.common import (
     get_aoi_path,
@@ -115,6 +116,16 @@ def gather_changesets():
         raise e
 
 
+def get_original_aoi_extract():
+    aoi_path = get_aoi_path()
+    original_aoi_name = os.environ.get('ORIGINAL_AOI_NAME')
+    if not original_aoi_name:
+        raise Exception('ORIGINAL_AOI_NAME should be defined in the env')
+    original_aoi_path = os.path.join(aoi_path, original_aoi_name)
+    counter_handler = CounterHandler()
+    counter_handler.apply_file(original_aoi_path)
+
+
 @set_error_status_on_exception(
     prev_state=ReplayTool.STATUS_EXTRACTING_UPSTREAM_AOI,
     curr_state=ReplayTool.STATUS_EXTRACTING_LOCAL_AOI
@@ -199,6 +210,22 @@ def filter_referenced_elements_and_detect_conflicts():
     local_aoi_handler.apply_file(local_aoi_path)
     current_aoi_handler = AOIHandler(tracker)
     current_aoi_handler.apply_file(current_aoi_path)
+
+    # Add total count data to replay_tool
+    tool = ReplayTool.objects.get()
+    tool.elements_data = {
+        'local': {
+            'nodes_count': local_aoi_handler.nodes_count,
+            'ways_count': local_aoi_handler.ways_count,
+            'relations_count': local_aoi_handler.relations_count,
+        },
+        'upstream': {
+            'nodes_count': current_aoi_handler.nodes_count,
+            'ways_count': current_aoi_handler.ways_count,
+            'relations_count': current_aoi_handler.relations_count,
+        }
+    }
+    tool.save()
 
     aoi_elements: FilteredElements = filter_elements_from_aoi_handler(tracker, current_aoi_handler)
 
