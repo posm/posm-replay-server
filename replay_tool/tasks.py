@@ -269,6 +269,12 @@ def filter_referenced_elements_and_detect_conflicts():
     prev_state=ReplayTool.STATUS_DETECTING_CONFLICTS,
     curr_state=ReplayTool.STATUS_CREATING_GEOJSONS,
 )
+def generate_local_and_upstream_geojsons(local_ref_path, upstream_ref_path):
+    local_geojson = generate_geojsons(local_ref_path)
+    upstream_geojson = generate_geojsons(upstream_ref_path)
+    return local_geojson, upstream_geojson
+
+
 def generate_geojsons(osmpath):
     with open(osmpath, 'r', encoding='utf-8') as f:
         xml = f.read()
@@ -301,9 +307,10 @@ def task_prepare_data_for_replay_tool():
     logger.info("Filtered referenced elements")
 
     logger.info("Generating geojsons")
-    local_geojson = generate_geojsons(local_handler.ref_osm_path)
-    upstream_geojson = generate_geojsons(upstream_handler.ref_osm_path)
-
+    local_geojson, upstream_geojson = generate_local_and_upstream_geojsons(
+        local_handler.ref_osm_path,
+        upstream_handler.ref_osm_path,
+    )
     print('LOCAL GEOJSON', local_geojson)
     print('UPSTREAM GEOJSON', upstream_geojson)
 

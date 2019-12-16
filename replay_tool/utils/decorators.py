@@ -17,7 +17,7 @@ def set_error_status_on_exception(prev_state=None, curr_state=None):
                 raise Exception(f'Relay tool has errored while {replay_tool.state}')
 
             if replay_tool.state != prev_state or not replay_tool.is_current_state_complete:
-                raise Exception(f'Current AOI extract can be run only after {prev_state} is completed')
+                raise Exception(f'{curr_state} can be run only after {prev_state} is completed')
 
             replay_tool.state = curr_state
             replay_tool.is_current_state_complete = False
@@ -26,10 +26,12 @@ def set_error_status_on_exception(prev_state=None, curr_state=None):
             try:
                 ret = f(*args, **kwargs)
                 replay_tool = ReplayTool.objects.get()
+                print('Setting curr state true')
                 replay_tool.is_current_state_complete = True
                 replay_tool.save()
                 return ret
             except Exception:
+                replay_tool = ReplayTool.objects.get()
                 replay_tool.has_errored = True
                 replay_tool.save()
                 logger.error(f'Error during {curr_state}', exc_info=True)
