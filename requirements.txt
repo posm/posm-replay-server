@@ -10,6 +10,7 @@ djangorestframework-camel-case==1.1.2
 uwsgi
 mock==3.0.5
 osmium==2.15.3
+osm2geojson==0.1.13
 
 ipython==7.10.1
 
