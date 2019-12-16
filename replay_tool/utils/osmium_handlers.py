@@ -1,29 +1,95 @@
 import osmium
+import os
 
 from replay_tool.serializers import NodeSerializer, WaySerializer, RelationSerializer
 
 
+class CounterHandler(osmium.SimpleHandler):
+    """
+    Stores counts of eleements
+    """
+    def __init__(self):
+        super().__init__()
+        self.nodes_count = 0
+        self.ways_count = 0
+        self.relations_count = 0
+
+    def node(self, n):
+        self.nodes_count += 1
+
+    def way(self, w):
+        self.ways_count += 1
+
+    def relation(self, r):
+        self.relations_count += 1
+
+
 class AOIHandler(osmium.SimpleHandler):
     """
-    Stores AOI elements as keys values pair.
+    Stores AOI elements as keys values pair, along with total count
+    @tracker: An instance of OSMElementsTracker class
+        This is used to filter elements referenced/added in the tracker
+    @ref_osm_path: filepath(osm) string for re-storing referenced elements
     """
-    def __init__(self, tracker):
+    def __init__(self, tracker, ref_osm_path):
         super().__init__()
         self.tracker = tracker
+        self.ref_osm_path = ref_osm_path
+
+        # osmfile to write referenced/added elements only
+        try:
+            os.remove(ref_osm_path)
+        except OSError:
+            pass
+
+        self.writer = osmium.SimpleWriter(ref_osm_path)
+
+        self.nodes_count = 0
+        self.ways_count = 0
+        self.relations_count = 0
+
         self.nodes: dict = {}
         self.ways: dict = {}
         self.relations: dict = {}
 
+        self._nodes: dict = {}
+        self._ways: dict = {}
+
+    def apply_file_and_cleanup(self, filename):
+        self.apply_file(filename)
+
+        self.writer.close()
+
+        self._nodes.clear()
+        self._ways.clear()
+
     def node(self, n):
+        self._nodes[n.id] = n
+        self.nodes_count += 1
         if n.id in self.tracker.referenced_elements['nodes'] or n.id in self.tracker.added_elements['nodes']:
+            self.writer.add_node(n)
             self.nodes[n.id] = NodeSerializer(n).data
 
     def way(self, w):
+        self._ways[w.id] = w
+        self.ways_count += 1
         if w.id in self.tracker.referenced_elements['ways'] or w.id in self.tracker.added_elements['ways']:
+            for node in w.nodes:
+                self.writer.add_node(self._nodes[node.ref])
+            self.writer.add_way(w)
             self.ways[w.id] = WaySerializer(w).data
 
     def relation(self, r):
+        self.relations_count += 1
         if r.id in self.tracker.referenced_elements['relations'] or r.id in self.tracker.added_elements['relations']:
+            for member in r.members:
+                if member.type == 'way':
+                    for node in self._ways[member.ref].nodes:
+                        self.writer.add_node(self._nodes[node.ref])
+                    self.writer.add_way(self._ways[member.ref])
+                elif member.type == 'node':
+                    self.writer.add_node(self._nodes[member.ref])
+            self.writer.add_relation(r)
             self.relations[r.id] = RelationSerializer(r).data
 
 

@@ -9,6 +9,7 @@ class ReplayTool(models.Model):
     STATUS_EXTRACTING_UPSTREAM_AOI = 'extracting_upstream_aoi'  # Step 2
     STATUS_EXTRACTING_LOCAL_AOI = 'extracting_local_aoi'  # Step 3
     STATUS_DETECTING_CONFLICTS = 'detecting_conflicts'  # Step 4
+    STATUS_CREATING_GEOJSONS = 'creating_geojsons'  # Step 5
     STATUS_CONFLICTS = 'conflicts'
     STATUS_RESOLVED = 'resolved'
     STATUS_PUSH_CONFLICTS = 'push_conflicts'
@@ -20,6 +21,7 @@ class ReplayTool(models.Model):
         (STATUS_EXTRACTING_LOCAL_AOI, 'Extracting Local Aoi'),
         (STATUS_EXTRACTING_UPSTREAM_AOI, 'Extracting Upstream Aoi'),
         (STATUS_DETECTING_CONFLICTS, 'Detecting Conflicts'),
+        (STATUS_CREATING_GEOJSONS, 'Creating GeoJSONs'),
         (STATUS_CONFLICTS, 'Conflicts'),
         (STATUS_RESOLVED, 'Resolved'),
         (STATUS_PUSH_CONFLICTS, 'Push Conflicts'),

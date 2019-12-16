@@ -4,6 +4,7 @@ import os
 import tempfile
 
 import psycopg2
+import osm2geojson
 
 from .models import (
     ReplayTool, LocalChangeSet, ConflictingNode,
@@ -206,10 +207,10 @@ def filter_referenced_elements_and_detect_conflicts():
 
     tracker = track_elements_from_local_changesets()
 
-    local_aoi_handler = AOIHandler(tracker)
-    local_aoi_handler.apply_file(local_aoi_path)
-    current_aoi_handler = AOIHandler(tracker)
-    current_aoi_handler.apply_file(current_aoi_path)
+    local_aoi_handler = AOIHandler(tracker, '/tmp/local_referenced.osm')
+    local_aoi_handler.apply_file_and_cleanup(local_aoi_path)
+    upstream_aoi_handler = AOIHandler(tracker, '/tmp/upstream_referenced.osm')
+    upstream_aoi_handler.apply_file_and_cleanup(current_aoi_path)
 
     # Add total count data to replay_tool
     tool = ReplayTool.objects.get()
@@ -220,14 +221,14 @@ def filter_referenced_elements_and_detect_conflicts():
             'relations_count': local_aoi_handler.relations_count,
         },
         'upstream': {
-            'nodes_count': current_aoi_handler.nodes_count,
-            'ways_count': current_aoi_handler.ways_count,
-            'relations_count': current_aoi_handler.relations_count,
+            'nodes_count': upstream_aoi_handler.nodes_count,
+            'ways_count': upstream_aoi_handler.ways_count,
+            'relations_count': upstream_aoi_handler.relations_count,
         }
     }
     tool.save()
 
-    aoi_elements: FilteredElements = filter_elements_from_aoi_handler(tracker, current_aoi_handler)
+    aoi_elements: FilteredElements = filter_elements_from_aoi_handler(tracker, upstream_aoi_handler)
 
     local_elements: FilteredElements = filter_elements_from_aoi_handler(tracker, local_aoi_handler)
 
@@ -261,6 +262,19 @@ def filter_referenced_elements_and_detect_conflicts():
     for item, conflicting_items in conflicting_elements.items():
         ITEM_CLASS_MAP[item].create_multiple_local_aoi_data(conflicting_items)
 
+    return local_aoi_handler, upstream_aoi_handler
+
+
+@set_error_status_on_exception(
+    prev_state=ReplayTool.STATUS_DETECTING_CONFLICTS,
+    curr_state=ReplayTool.STATUS_CREATING_GEOJSONS,
+)
+def generate_geojsons(osmpath):
+    with open(osmpath, 'r', encoding='utf-8') as f:
+        xml = f.read()
+    geojson = osm2geojson.xml2geojson(xml)
+    return geojson
+
 
 def task_prepare_data_for_replay_tool():
     """
@@ -283,5 +297,14 @@ def task_prepare_data_for_replay_tool():
     logger.info("Got local aoi extract")
 
     logger.info("Filtering referenced elements")
-    filter_referenced_elements_and_detect_conflicts()
+    local_handler, upstream_handler = filter_referenced_elements_and_detect_conflicts()
     logger.info("Filtered referenced elements")
+
+    logger.info("Generating geojsons")
+    local_geojson = generate_geojsons(local_handler.ref_osm_path)
+    upstream_geojson = generate_geojsons(upstream_handler.ref_osm_path)
+
+    print('LOCAL GEOJSON', local_geojson)
+    print('UPSTREAM GEOJSON', upstream_geojson)
+
+    logger.info("Generated geojsons")
