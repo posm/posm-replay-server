@@ -26,7 +26,6 @@ def set_error_status_on_exception(prev_state=None, curr_state=None):
             try:
                 ret = f(*args, **kwargs)
                 replay_tool = ReplayTool.objects.get()
-                print('Setting curr state true')
                 replay_tool.is_current_state_complete = True
                 replay_tool.save()
                 return ret
@@ -35,7 +34,6 @@ def set_error_status_on_exception(prev_state=None, curr_state=None):
                 replay_tool.has_errored = True
                 replay_tool.save()
                 logger.error(f'Error during {curr_state}', exc_info=True)
-                print(f'Error during {curr_state}')
                 return None
         return wrapper
     return decorator

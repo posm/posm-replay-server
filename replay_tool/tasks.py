@@ -259,6 +259,10 @@ def generate_local_and_upstream_geojsons(local_ref_path, upstream_ref_path):
         type = feature['properties']['type']
         id = feature['properties']['id']
         obj = ConflictingOSMElement.objects.get(element_id=id, type=type)
+        feature['properties'] = {
+            **feature['properties'],
+            **{k: v for k, v in obj.local_data.items() if k != 'location'}
+        }
         obj.local_geojson = feature
         obj.save()
 
@@ -266,6 +270,10 @@ def generate_local_and_upstream_geojsons(local_ref_path, upstream_ref_path):
         type = feature['properties']['type']
         id = feature['properties']['id']
         obj = ConflictingOSMElement.objects.get(element_id=id, type=type)
+        feature['properties'] = {
+            **feature['properties'],
+            **{k: v for k, v in obj.upstream_data.items() if k != 'location'}
+        }
         obj.upstream_geojson = feature
         obj.save()
 
