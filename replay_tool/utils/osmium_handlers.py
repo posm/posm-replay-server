@@ -1,7 +1,11 @@
 import osmium
 import os
 
-from replay_tool.serializers import NodeSerializer, WaySerializer, RelationSerializer
+from replay_tool.serializers.osm import (
+    NodeSerializer,
+    WaySerializer,
+    RelationSerializer,
+)
 
 
 class CounterHandler(osmium.SimpleHandler):

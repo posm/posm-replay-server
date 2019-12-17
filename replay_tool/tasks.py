@@ -11,7 +11,7 @@ from .models import (
     ConflictingWay, ConflictingRelation,
 )
 
-from .serializers import NodeSerializer, WaySerializer, RelationSerializer
+from .serializers.osm import NodeSerializer, WaySerializer, RelationSerializer
 from .utils.decorators import set_error_status_on_exception
 from .utils.osm_api import get_changeset_data, get_changeset_meta
 from .utils.osmium_handlers import (

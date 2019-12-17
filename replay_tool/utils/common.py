@@ -1,11 +1,14 @@
 import os
 import json
-from functools import reduce
 from datetime import datetime
 
-from replay_tool.serializers import NodeSerializer, WaySerializer, RelationSerializer
+from replay_tool.serializers.osm import (
+    NodeSerializer,
+    WaySerializer,
+    RelationSerializer
+)
 
-from typing import Any, Callable, Tuple, List, Optional
+from typing import Any, Tuple, List, Optional
 from mypy_extensions import TypedDict
 
 

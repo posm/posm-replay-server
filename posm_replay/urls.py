@@ -20,19 +20,17 @@ from django.urls import path, include
 from rest_framework import routers
 
 from replay_tool.views import (
-    CurrentAOIView,
-    ReplayToolViewSet,
+    ReplayToolView,
     ConflictsView,
 )
 
 
 router = routers.DefaultRouter()
 
-router.register(r'replay-tool', ReplayToolViewSet, basename='replay_tool')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/v1/current-aoi/', CurrentAOIView.as_view()),
+    path('api/v1/replay-tool/', ReplayToolView.as_view()),
     path('api/v1/conflicts/', ConflictsView.as_view()),
     path('api/v1/', include(router.urls)),
 ]
