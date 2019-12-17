@@ -56,9 +56,7 @@ class ReplayTool(models.Model):
         r.has_errored = False
         # Delete other items
         LocalChangeSet.objects.all().delete()
-        ConflictingNode.objects.all().delete()
-        ConflictingWay.objects.all().delete()
-        ConflictingRelation.objects.all().delete()
+        ConflictingOSMElement.objects.all().delete()
         r.save()
 
     def save(self, *args, **kwargs):
@@ -91,6 +89,16 @@ class LocalChangeSet(models.Model):
 
 
 class ConflictingOSMElement(models.Model):
+    TYPE_NODE = 'node'
+    TYPE_WAY = 'way'
+    TYPE_RELATION = 'relation'
+
+    CHOICES_TYPE = (
+        (TYPE_NODE, 'Node'),
+        (TYPE_WAY, 'Way'),
+        (TYPE_RELATION, 'Relation'),
+    )
+
     LOCAL_ACTION_ADDED = 'added'
     LOCAL_ACTION_DELETED = 'deleted'
     LOCAL_ACTION_MODIFIED = 'modified'
@@ -100,8 +108,12 @@ class ConflictingOSMElement(models.Model):
         (LOCAL_ACTION_DELETED, 'Deleted'),
         (LOCAL_ACTION_MODIFIED, 'Modified'),
     )
+    element_id = models.BigIntegerField()
+    type = models.CharField(max_length=15, choices=CHOICES_TYPE)
     local_data = JSONField(default=dict)
+    local_geojson = JSONField(default=dict)
     upstream_data = JSONField(default=dict)
+    upstream_geojson = JSONField(default=dict)
     resolved_data = JSONField(default=dict, null=True, blank=True)
     is_resolved = models.BooleanField(default=False)
     local_action = models.CharField(
@@ -111,131 +123,19 @@ class ConflictingOSMElement(models.Model):
     )
 
     class Meta:
-        abstract = True
-
-
-class ConflictingNode(ConflictingOSMElement):
-    node_id = models.BigIntegerField(unique=True)
+        unique_together = ('element_id', 'type')
 
     def __str__(self):
         status = 'Resolved' if self.is_resolved else 'Conflicting'
-        return f'Node {self.node_id}: {status}'
+        return f'{self.type.title()} {self.node_id}: {status}'
 
     @classmethod
     @transaction.atomic
-    def create_multiple_local_aoi_data(cls, local_aoi_pairs, **kwargs):
+    def create_multiple_local_aoi_data(cls, type, local_aoi_pairs):
         for loc, aoi in local_aoi_pairs:
             cls.objects.create(
-                node_id=loc['id'],
+                element_id=loc['id'],
+                type=type,
                 local_data=loc,
                 upstream_data=aoi,
-                **kwargs
             )
-
-    @property
-    def local_geojson(self):
-        # GeoJSON is cached
-        if not hasattr(self, '_local_geojson'):
-            self._local_geojson = get_node_geojson(self.local_data)
-        return self._geojson
-
-    @property
-    def upstream_geojson(self):
-        # GeoJSON is cached
-        if not hasattr(self, '_upstream_geojson'):
-            self._local_geojson = get_node_geojson(self.upstream_data)
-        return self._geojson
-
-
-class ConflictingWay(ConflictingOSMElement):
-    way_id = models.BigIntegerField(unique=True)
-
-    def __str__(self):
-        status = 'Resolved' if self.resolved else 'Conflicting'
-        return f'Way {self.way_id}: {status}'
-
-    @classmethod
-    @transaction.atomic
-    def create_multiple_local_aoi_data(cls, local_aoi_pairs, **kwargs):
-        for loc, aoi in local_aoi_pairs:
-            cls.objects.create(
-                way_id=loc['id'],
-                local_data=loc,
-                upstream_data=aoi,
-                **kwargs
-            )
-
-    @property
-    def local_geojson(self):
-        # GeoJSON is cached
-        if not hasattr(self, '_local_geojson'):
-            self._local_geojson = get_way_geojson(self.local_data)
-        return self._geojson
-
-    @property
-    def upstream_geojson(self):
-        # GeoJSON is cached
-        if not hasattr(self, '_upstream_geojson'):
-            self._local_geojson = get_way_geojson(self.upstream_data)
-        return self._geojson
-
-
-class ConflictingRelation(ConflictingOSMElement):
-    relation_id = models.BigIntegerField(unique=True)
-
-    def __str__(self):
-        status = 'Resolved' if self.resolved else 'Conflicting'
-        return f'Relation {self.node_id}: {status}'
-
-    @classmethod
-    @transaction.atomic
-    def create_multiple_local_aoi_data(cls, local_aoi_pairs, **kwargs):
-        for loc, aoi in local_aoi_pairs:
-            cls.objects.create(
-                relation_id=loc['id'],
-                local_data=loc,
-                upstream_data=aoi,
-                **kwargs
-            )
-
-    @property
-    def local_geojson(self):
-        # GeoJSON is cached
-        if not hasattr(self, '_local_geojson'):
-            self._local_geojson = get_relation_geojson(self.local_data)
-        return self._geojson
-
-    @property
-    def upstream_geojson(self):
-        # GeoJSON is cached
-        if not hasattr(self, '_upstream_geojson'):
-            self._local_geojson = get_relation_geojson(self.upstream_data)
-        return self._geojson
-
-
-def get_node_geojson(data):
-    if not data:
-        return {}
-    location = data['location']
-    return {
-        'type': 'Feature',
-        'geometry': {
-            'type': 'Point',
-            'coordinates': [location['lat'], location['lon']],
-        },
-        'properties': {
-            k: v for k, v in data.items() if k != 'location'
-        }
-    }
-
-
-def get_way_geojson(data):
-    if not data:
-        return {}
-    return {}
-
-
-def get_relation_geojson(data):
-    if not data:
-        return {}
-    return {}

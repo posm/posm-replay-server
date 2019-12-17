@@ -9,11 +9,10 @@ import osm2geojson
 from celery import shared_task
 
 from .models import (
-    ReplayTool, LocalChangeSet, ConflictingNode,
-    ConflictingWay, ConflictingRelation,
+    ReplayTool, LocalChangeSet,
+    ConflictingOSMElement,
 )
 
-from .serializers.osm import NodeSerializer, WaySerializer, RelationSerializer
 from .utils.decorators import set_error_status_on_exception
 from .utils.osm_api import get_changeset_data, get_changeset_meta
 from .utils.osmium_handlers import (
@@ -42,24 +41,6 @@ logger = logging.getLogger(__name__)
 OVERPASS_API_URL = 'http://overpass-api.de/api/interpreter'
 
 OSMOSIS_COMMAND_TIMEOUT_SECS = 10
-
-ITEM_CLASS_MAP = {
-    'nodes': ConflictingNode,
-    'ways': ConflictingWay,
-    'relations': ConflictingRelation,
-}
-
-ITEM_SERIALIZER_MAP = {
-    'nodes': NodeSerializer,
-    'ways': WaySerializer,
-    'relations': RelationSerializer,
-}
-
-ITEM_ID_PARAM = {
-    'nodes': lambda x: {'node_id': x},
-    'ways': lambda x: {'way_id': x},
-    'relations': lambda x: {'relation_id': x},
-}
 
 
 def get_first_changeset_id() -> int:
@@ -108,14 +89,14 @@ def gather_changesets():
     try:
         first_changeset_id = get_first_changeset_id()
     except Exception as e:
-        logger.warn('Error getting first changeset id', exc_info=True)
+        logger.warning('Error getting first changeset id', exc_info=True)
         raise e
 
     # Now collect changesets
     try:
         collect_changesets_from_apidb(first_changeset_id)
     except Exception as e:
-        logger.warn('Error collecting changesets from apidb', exc_info=True)
+        logger.warning('Error collecting changesets from apidb', exc_info=True)
         raise e
 
 
@@ -134,6 +115,7 @@ def get_original_aoi_extract():
     curr_state=ReplayTool.STATUS_EXTRACTING_LOCAL_AOI
 )
 def get_local_aoi_extract():
+    return True
     db_user = os.environ.get('POSM_DB_USER')
     db_password = os.environ.get('POSM_DB_PASSWORD')
     osmosis_aoi_root = os.environ.get('OSMOSIS_AOI_ROOT')
@@ -239,22 +221,20 @@ def filter_referenced_elements_and_detect_conflicts():
 
     for item, elems in local_added_elements.items():
         for elem in elems:
-            modelClass = ITEM_CLASS_MAP[item]
-            id_name_param = ITEM_ID_PARAM[item]
-            modelClass.objects.create(
+            ConflictingOSMElement.objects.create(
+                type=item[:-1],  # the item is plural: nodes, ways, etc but type is singular
+                element_id=elem['id'],
                 local_data=elem,
-                local_action=modelClass.LOCAL_ACTION_ADDED,
-                **id_name_param(elem['id'])
+                local_action=ConflictingOSMElement.LOCAL_ACTION_ADDED,
             )
 
     for item, elems in local_deleted_elements.items():
         for elem in elems:
-            modelClass = ITEM_CLASS_MAP[item]
-            id_name_param = ITEM_ID_PARAM[item]
-            modelClass.objects.create(
+            ConflictingOSMElement.objects.create(
+                type=item[:-1],  # the item is plural: nodes, ways, etc but type is singular
+                element_id=elem['id'],
                 local_data=elem,
-                local_action=modelClass.LOCAL_ACTION_DELETED,
-                **id_name_param(elem['id'])
+                local_action=ConflictingOSMElement.LOCAL_ACTION_DELETED,
             )
 
     conflicting_elements: ConflictingElements = get_conflicting_elements(
@@ -262,7 +242,7 @@ def filter_referenced_elements_and_detect_conflicts():
     )
 
     for item, conflicting_items in conflicting_elements.items():
-        ITEM_CLASS_MAP[item].create_multiple_local_aoi_data(conflicting_items)
+        ConflictingOSMElement.create_multiple_local_aoi_data(item[:-1], conflicting_items)
 
     return local_aoi_handler, upstream_aoi_handler
 
@@ -274,7 +254,22 @@ def filter_referenced_elements_and_detect_conflicts():
 def generate_local_and_upstream_geojsons(local_ref_path, upstream_ref_path):
     local_geojson = generate_geojsons(local_ref_path)
     upstream_geojson = generate_geojsons(upstream_ref_path)
-    return local_geojson, upstream_geojson
+
+    for feature in local_geojson['features']:
+        type = feature['properties']['type']
+        id = feature['properties']['id']
+        obj = ConflictingOSMElement.objects.get(element_id=id, type=type)
+        obj.local_geojson = feature
+        obj.save()
+
+    for feature in upstream_geojson['features']:
+        type = feature['properties']['type']
+        id = feature['properties']['id']
+        obj = ConflictingOSMElement.objects.get(element_id=id, type=type)
+        obj.upstream_geojson = feature
+        obj.save()
+
+    return True
 
 
 def generate_geojsons(osmpath):
@@ -310,11 +305,5 @@ def task_prepare_data_for_replay_tool():
     logger.info("Filtered referenced elements")
 
     logger.info("Generating geojsons")
-    local_geojson, upstream_geojson = generate_local_and_upstream_geojsons(
-        local_handler.ref_osm_path,
-        upstream_handler.ref_osm_path,
-    )
-    print('LOCAL GEOJSON', local_geojson)
-    print('UPSTREAM GEOJSON', upstream_geojson)
-
+    generate_local_and_upstream_geojsons(local_handler.ref_osm_path, upstream_handler.ref_osm_path)
     logger.info("Generated geojsons")

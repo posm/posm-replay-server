@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from replay_tool.models import ReplayTool, LocalChangeSet
+from replay_tool.models import ReplayTool, LocalChangeSet, ConflictingOSMElement
 
 from replay_tool.utils.common import (
     get_current_aoi_bbox, get_aoi_name,
@@ -26,30 +26,7 @@ class ReplayToolSerializer(serializers.ModelSerializer):
         }
 
 
-class ConflictingElementSerializer(serializers.Serializer):
-    local_geojson = serializers.SerializerMethodField()
-    upstream_geojson = serializers.SerializerMethodField()
-
-    def get_geojson(self, obj):
-        return obj.geojson
-
-
-class ConflictingNodeSerializer(ConflictingElementSerializer):
-    node_id = serializers.IntegerField(read_only=True)
-
+class ConflictingOSMElementSerializer(serializers.ModelSerializer):
     class Meta:
-        fields = ('id', 'node_id', 'geojson', 'is_resolved')
-
-
-class ConflictingWaySerializer(ConflictingElementSerializer):
-    way_id = serializers.IntegerField(read_only=True)
-
-    class Meta:
-        fields = ('id', 'way_id', 'geojson', 'is_resolved')
-
-
-class ConflictingRelationSerializer(ConflictingElementSerializer):
-    relation_id = serializers.IntegerField(read_only=True)
-
-    class Meta:
-        fields = ('id', 'relation_id', 'geojson', 'is_resolved')
+        model = ConflictingOSMElement
+        exclude = ('resolved_data', 'local_data', 'upstream_data')

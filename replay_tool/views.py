@@ -5,17 +5,10 @@ from rest_framework.response import Response
 
 from .tasks import task_prepare_data_for_replay_tool
 
-from .models import (
-    ReplayTool,
-    ConflictingNode,
-    ConflictingWay,
-    ConflictingRelation,
-)
+from .models import ReplayTool, ConflictingOSMElement
 from .serializers.models import (
     ReplayToolSerializer,
-    ConflictingNodeSerializer,
-    ConflictingWaySerializer,
-    ConflictingRelationSerializer,
+    ConflictingOSMElementSerializer,
 )
 
 
@@ -44,12 +37,7 @@ def retrigger(request):
 
 class ConflictsView(APIView):
     def get(self, request, version=None, format=None):
-        node_conflicts = ConflictingNode.objects.filter(local_action=ConflictingNode.LOCAL_ACTION_MODIFIED)
-        way_conflicts = ConflictingWay.objects.filter(local_action=ConflictingWay.LOCAL_ACTION_MODIFIED)
-        relation_conflicts = ConflictingRelation.objects.filter(local_action=ConflictingRelation.LOCAL_ACTION_MODIFIED)
-
-        return Response({
-            'nodes': ConflictingNodeSerializer(node_conflicts, many=True).data,
-            'ways': ConflictingWaySerializer(way_conflicts, many=True).data,
-            'relations': ConflictingRelationSerializer(relation_conflicts, many=True).data,
-        })
+        conflicting_elements = ConflictingOSMElement.objects.filter(
+            local_action=ConflictingOSMElement.LOCAL_ACTION_MODIFIED
+        )
+        return Response(ConflictingOSMElementSerializer(conflicting_elements, many=True).data)
