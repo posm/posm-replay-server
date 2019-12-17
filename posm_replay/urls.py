@@ -14,7 +14,6 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path
 from django.urls import path, include
 
 from rest_framework import routers
@@ -22,6 +21,8 @@ from rest_framework import routers
 from replay_tool.views import (
     ReplayToolView,
     ConflictsView,
+    trigger,
+    retrigger,
 )
 
 
@@ -31,6 +32,8 @@ router = routers.DefaultRouter()
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/v1/replay-tool/', ReplayToolView.as_view()),
+    path('api/v1/trigger/', trigger),
+    path('api/v1/re-trigger/', retrigger),
     path('api/v1/conflicts/', ConflictsView.as_view()),
     path('api/v1/', include(router.urls)),
 ]

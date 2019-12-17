@@ -43,6 +43,10 @@ class ReplayTool(models.Model):
     def __str__(self):
         return self.status
 
+    @property
+    def is_initiated(self):
+        return self.state != self.STATUS_NOT_TRIGGERRED
+
     @classmethod
     def reset(cls, state=STATUS_NOT_TRIGGERRED):
         r, _ = cls.objects.get_or_create()

@@ -91,6 +91,10 @@ LOGGING = {
     }
 }
 
+CELERY_REDIS_URL = os.environ.get('CELERY_REDIS_URL', 'redis://redis:6379/0')
+CELERY_BROKER_URL = CELERY_REDIS_URL
+CELERY_RESULT_BACKEND = CELERY_REDIS_URL
+
 REST_FRAMEWORK = {
     'EXCEPTION_HANDLER': 'posm_replay.exception_handler.custom_exception_handler',
     'DEFAULT_PAGINATION_CLASS':

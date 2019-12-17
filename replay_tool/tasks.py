@@ -6,6 +6,8 @@ import tempfile
 import psycopg2
 import osm2geojson
 
+from celery import shared_task
+
 from .models import (
     ReplayTool, LocalChangeSet, ConflictingNode,
     ConflictingWay, ConflictingRelation,
@@ -282,6 +284,7 @@ def generate_geojsons(osmpath):
     return geojson
 
 
+@shared_task
 def task_prepare_data_for_replay_tool():
     """
     This is the function that does all the behind the scene tasks like:
