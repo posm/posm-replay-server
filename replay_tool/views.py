@@ -1,5 +1,6 @@
 from rest_framework.decorators import api_view
 from rest_framework.views import APIView
+from rest_framework import viewsets
 from rest_framework.response import Response
 
 
@@ -9,6 +10,7 @@ from .models import ReplayTool, ConflictingOSMElement
 from .serializers.models import (
     ReplayToolSerializer,
     ConflictingOSMElementSerializer,
+    MiniConflictingOSMElementSerializer,
 )
 
 
@@ -35,9 +37,12 @@ def retrigger(request):
     return Response({'message': 'Replay Tool has been successfully re-triggered.'})
 
 
-class ConflictsView(APIView):
-    def get(self, request, version=None, format=None):
-        conflicting_elements = ConflictingOSMElement.objects.filter(
-            local_action=ConflictingOSMElement.LOCAL_ACTION_MODIFIED
-        )
-        return Response(ConflictingOSMElementSerializer(conflicting_elements, many=True).data)
+class ConflictsViewSet(viewsets.ModelViewSet):
+    queryset = conflicting_elements = ConflictingOSMElement.objects.filter(
+        local_action=ConflictingOSMElement.LOCAL_ACTION_MODIFIED
+    )
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return MiniConflictingOSMElementSerializer
+        return ConflictingOSMElementSerializer

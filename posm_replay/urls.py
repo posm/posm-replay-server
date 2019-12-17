@@ -20,7 +20,7 @@ from rest_framework import routers
 
 from replay_tool.views import (
     ReplayToolView,
-    ConflictsView,
+    ConflictsViewSet,
     trigger,
     retrigger,
 )
@@ -28,12 +28,13 @@ from replay_tool.views import (
 
 router = routers.DefaultRouter()
 
+router.register('conflicts', ConflictsViewSet, basename='conflicts')
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/v1/replay-tool/', ReplayToolView.as_view()),
     path('api/v1/trigger/', trigger),
     path('api/v1/re-trigger/', retrigger),
-    path('api/v1/conflicts/', ConflictsView.as_view()),
     path('api/v1/', include(router.urls)),
 ]

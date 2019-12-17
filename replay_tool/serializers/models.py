@@ -20,6 +20,9 @@ class ReplayToolSerializer(serializers.ModelSerializer):
             'name': get_aoi_name(exception_if_not_set=True),
             'bounds': get_current_aoi_bbox(),
             'date_cloned': get_aoi_created_datetime(),
+            'total_conflicting_elements': ConflictingOSMElement.objects.filter(
+                is_resolved=False
+            ).count(),
             'local_changesets_count': LocalChangeSet.objects.count(),
             'local_elements_count': obj.elements_data.get('local'),
             'upstream_elements_count': obj.elements_data.get('upstream'),
@@ -30,3 +33,9 @@ class ConflictingOSMElementSerializer(serializers.ModelSerializer):
     class Meta:
         model = ConflictingOSMElement
         exclude = ('resolved_data', 'local_data', 'upstream_data')
+
+
+class MiniConflictingOSMElementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ConflictingOSMElement
+        fields = ('id', 'element_id', 'type')
