@@ -2,14 +2,9 @@ import os
 import json
 from datetime import datetime
 
-from replay_tool.serializers.osm import (
-    NodeSerializer,
-    WaySerializer,
-    RelationSerializer
-)
-
 from typing import Any, Tuple, List, Optional
 from mypy_extensions import TypedDict
+from .osmium_handlers import AOIHandler, OSMElementsTracker
 
 
 class FilteredElements(TypedDict):
@@ -68,7 +63,7 @@ def get_overpass_query(s, w, n, e) -> str:
     return f'(node({s},{w},{n},{e});<;>>;>;);out meta;'
 
 
-def filter_elements_from_aoi_handler(tracker, aoi_handler) -> FilteredElements:
+def filter_elements_from_aoi_handler(tracker: OSMElementsTracker, aoi_handler: AOIHandler) -> FilteredElements:
     """This function is used inside reducer to filter osm elements"""
     elements: FilteredElements = {
         'referenced': {'nodes': {}, 'ways': {}, 'relations': {}},
@@ -163,25 +158,43 @@ def filter_conflicting_pairs(local_referenced_elements, aoi_referenced_elements)
     for l_nid, local_element in local_referenced_elements.items():
         # NOTE: Assumption that l_nid is always present in aoi_referenced_elements
         # which is a very valid assumption
-        aoi_element = aoi_referenced_elements[l_nid]
+        aoi_element = aoi_referenced_elements.get(l_nid)
+        if not aoi_element:
+            continue
         if do_elements_conflict(aoi_element, local_element):
-            conflicting_elements.append((local_element, aoi_element))
+            conflicting_elements.append(local_element['id'])
     return conflicting_elements
 
 
-def get_conflicting_elements(local_referenced_elements, aoi_referenced_elements) -> ConflictingElements:
+def get_conflicting_elements(
+    local_referenced_elements, aoi_referenced_elements, version_handler
+) -> ConflictingElements:
+    # Filter elements that have been changed in upstream, ignore other
+    upstream_changed_nodes = {
+        k: v for k, v in aoi_referenced_elements['nodes'].items()
+        if v['version'] > version_handler.nodes_versions[v['id']]
+    }
+
+    upstream_changed_ways = {
+        k: v for k, v in aoi_referenced_elements['ways'].items()
+        if v['version'] > version_handler.ways_versions[v['id']]
+    }
+    upstream_changed_relations = {
+        k: v for k, v in aoi_referenced_elements['relations'].items()
+        if v['version'] > version_handler.relations_versions[v['id']]
+    }
     conflicting_elems: ConflictingElements = {
         'nodes': filter_conflicting_pairs(
             local_referenced_elements['nodes'],
-            aoi_referenced_elements['nodes'],
+            upstream_changed_nodes,
         ),
         'ways': filter_conflicting_pairs(
             local_referenced_elements['ways'],
-            aoi_referenced_elements['ways'],
+            upstream_changed_ways,
         ),
         'relations': filter_conflicting_pairs(
             local_referenced_elements['relations'],
-            aoi_referenced_elements['relations'],
+            upstream_changed_relations,
         ),
     }
     return conflicting_elems

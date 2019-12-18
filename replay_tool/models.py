@@ -99,28 +99,29 @@ class ConflictingOSMElement(models.Model):
         (TYPE_RELATION, 'Relation'),
     )
 
-    LOCAL_ACTION_ADDED = 'added'
-    LOCAL_ACTION_DELETED = 'deleted'
-    LOCAL_ACTION_MODIFIED = 'modified'
+    LOCAL_STATE_ADDED = 'added'
+    LOCAL_STATE_DELETED = 'deleted'
+    LOCAL_STATE_MODIFIED = 'modified'
+    LOCAL_STATE_CONFLICTING = 'conflicting'
 
-    CHOICES_LOCAL_ACTION = (
-        (LOCAL_ACTION_ADDED, 'Added'),
-        (LOCAL_ACTION_DELETED, 'Deleted'),
-        (LOCAL_ACTION_MODIFIED, 'Modified'),
+    CHOICES_LOCAL_STATE = (
+        (LOCAL_STATE_ADDED, 'Added'),
+        (LOCAL_STATE_DELETED, 'Deleted'),
+        (LOCAL_STATE_MODIFIED, 'Modified'),
+        (LOCAL_STATE_CONFLICTING, 'Conflicting'),
     )
     element_id = models.BigIntegerField()
     type = models.CharField(max_length=15, choices=CHOICES_TYPE)
+
     local_data = JSONField(default=dict)
     local_geojson = JSONField(default=dict)
+
     upstream_data = JSONField(default=dict)
     upstream_geojson = JSONField(default=dict)
+
     resolved_data = JSONField(default=dict, null=True, blank=True)
     is_resolved = models.BooleanField(default=False)
-    local_action = models.CharField(
-        max_length=15,
-        choices=CHOICES_LOCAL_ACTION,
-        default=LOCAL_ACTION_MODIFIED,
-    )
+    local_state = models.CharField(max_length=15, choices=CHOICES_LOCAL_STATE)
 
     class Meta:
         unique_together = ('element_id', 'type')

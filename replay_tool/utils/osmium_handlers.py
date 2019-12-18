@@ -8,24 +8,24 @@ from replay_tool.serializers.osm import (
 )
 
 
-class CounterHandler(osmium.SimpleHandler):
+class VersionHandler(osmium.SimpleHandler):
     """
-    Stores counts of eleements
+    Stores versions of elements
     """
     def __init__(self):
         super().__init__()
-        self.nodes_count = 0
-        self.ways_count = 0
-        self.relations_count = 0
+        self.nodes_versions = dict()
+        self.ways_versions = dict()
+        self.relations_versions = dict()
 
     def node(self, n):
-        self.nodes_count += 1
+        self.nodes_versions[n.id] = n.version
 
     def way(self, w):
-        self.ways_count += 1
+        self.ways_versions[w.id] = w.version
 
     def relation(self, r):
-        self.relations_count += 1
+        self.relations_versions[r.id] = r.version
 
 
 class AOIHandler(osmium.SimpleHandler):

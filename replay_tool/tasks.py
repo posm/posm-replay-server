@@ -19,7 +19,7 @@ from .utils.osmium_handlers import (
     OSMElementsTracker,
     ElementsFilterHandler,
     AOIHandler,
-    CounterHandler,
+    VersionHandler,
 )
 from .utils.common import (
     get_aoi_path,
@@ -100,14 +100,15 @@ def gather_changesets():
         raise e
 
 
-def get_original_aoi_extract():
+def get_original_element_versions():
     aoi_path = get_aoi_path()
     original_aoi_name = os.environ.get('ORIGINAL_AOI_NAME')
     if not original_aoi_name:
         raise Exception('ORIGINAL_AOI_NAME should be defined in the env')
     original_aoi_path = os.path.join(aoi_path, original_aoi_name)
-    counter_handler = CounterHandler()
-    counter_handler.apply_file(original_aoi_path)
+    version_handler = VersionHandler()
+    version_handler.apply_file(original_aoi_path)
+    return version_handler
 
 
 @set_error_status_on_exception(
@@ -115,7 +116,6 @@ def get_original_aoi_extract():
     curr_state=ReplayTool.STATUS_EXTRACTING_LOCAL_AOI
 )
 def get_local_aoi_extract():
-    return True
     db_user = os.environ.get('POSM_DB_USER')
     db_password = os.environ.get('POSM_DB_PASSWORD')
     osmosis_aoi_root = os.environ.get('OSMOSIS_AOI_ROOT')
@@ -193,8 +193,12 @@ def filter_referenced_elements_and_detect_conflicts():
 
     local_aoi_handler = AOIHandler(tracker, '/tmp/local_referenced.osm')
     local_aoi_handler.apply_file_and_cleanup(local_aoi_path)
+
     upstream_aoi_handler = AOIHandler(tracker, '/tmp/upstream_referenced.osm')
     upstream_aoi_handler.apply_file_and_cleanup(current_aoi_path)
+
+    # Get versions
+    version_handler = get_original_element_versions()
 
     # Add total count data to replay_tool
     tool = ReplayTool.objects.get()
@@ -212,37 +216,59 @@ def filter_referenced_elements_and_detect_conflicts():
     }
     tool.save()
 
-    aoi_elements: FilteredElements = filter_elements_from_aoi_handler(tracker, upstream_aoi_handler)
+    upstream_elements: FilteredElements = filter_elements_from_aoi_handler(tracker, upstream_aoi_handler)
 
     local_elements: FilteredElements = filter_elements_from_aoi_handler(tracker, local_aoi_handler)
 
     local_added_elements = tracker.get_added_elements(local_aoi_handler)
     local_deleted_elements = tracker.get_deleted_elements(local_aoi_handler)
 
-    for item, elems in local_added_elements.items():
+    local_modified_elements = tracker.get_modified_elements(local_aoi_handler)
+    upstream_modified_elements = tracker.get_modified_elements(upstream_aoi_handler)
+    upstream_modified_elements_map = {
+        elemtype: {
+            x['id']: x
+            for x in elems
+        } for elemtype, elems in upstream_modified_elements.items()
+    }
+
+    for elemtype, elems in local_modified_elements.items():
         for elem in elems:
             ConflictingOSMElement.objects.create(
-                type=item[:-1],  # the item is plural: nodes, ways, etc but type is singular
+                type=elemtype[:-1],  # the elemtype is plural: nodes, ways, etc but type is singular
                 element_id=elem['id'],
                 local_data=elem,
-                local_action=ConflictingOSMElement.LOCAL_ACTION_ADDED,
+                upstream_data=upstream_modified_elements_map[elemtype][elem['id']],
+                local_state=ConflictingOSMElement.LOCAL_STATE_MODIFIED,
             )
 
-    for item, elems in local_deleted_elements.items():
+    for elemtype, elems in local_added_elements.items():
         for elem in elems:
             ConflictingOSMElement.objects.create(
-                type=item[:-1],  # the item is plural: nodes, ways, etc but type is singular
+                type=elemtype[:-1],  # the elemtype is plural: nodes, ways, etc but type is singular
                 element_id=elem['id'],
                 local_data=elem,
-                local_action=ConflictingOSMElement.LOCAL_ACTION_DELETED,
+                local_state=ConflictingOSMElement.LOCAL_STATE_ADDED,
+            )
+
+    for elemtype, elems in local_deleted_elements.items():
+        for elem in elems:
+            ConflictingOSMElement.objects.create(
+                type=elemtype[:-1],  # the elemtype is plural: nodes, ways, etc but type is singular
+                element_id=elem['id'],
+                local_data=elem,
+                local_state=ConflictingOSMElement.LOCAL_STATE_DELETED
             )
 
     conflicting_elements: ConflictingElements = get_conflicting_elements(
-        local_elements['referenced'], aoi_elements['referenced']
+        local_elements['referenced'],
+        upstream_elements['referenced'],
+        version_handler,
     )
 
-    for item, conflicting_items in conflicting_elements.items():
-        ConflictingOSMElement.create_multiple_local_aoi_data(item[:-1], conflicting_items)
+    for elemtype, ids in conflicting_elements.items():
+        ConflictingOSMElement.objects.filter(type=elemtype[:-1], element_id__in=ids).\
+            update(local_state=ConflictingOSMElement.LOCAL_STATE_CONFLICTING)
 
     return local_aoi_handler, upstream_aoi_handler
 

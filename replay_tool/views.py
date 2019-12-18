@@ -39,7 +39,7 @@ def retrigger(request):
 
 class ConflictsViewSet(viewsets.ModelViewSet):
     queryset = conflicting_elements = ConflictingOSMElement.objects.filter(
-        local_action=ConflictingOSMElement.LOCAL_ACTION_MODIFIED
+        local_state=ConflictingOSMElement.LOCAL_STATE_CONFLICTING
     )
 
     def get_serializer_class(self):
