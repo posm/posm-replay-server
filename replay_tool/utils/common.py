@@ -13,6 +13,11 @@ class FilteredElements(TypedDict):
     modified: Any
 
 
+class AOIInfo(TypedDict):
+    bbox: List[float]
+    description: str
+
+
 class ConflictingElements(TypedDict):
     nodes: List[Tuple[object, object]]
     ways: List[Tuple[object, object]]
@@ -39,7 +44,7 @@ def get_aoi_path() -> str:
     return os.path.join(aoi_root, aoi_name)
 
 
-def get_current_aoi_bbox() -> List[float]:
+def get_current_aoi_info() -> AOIInfo:
     aoi_path = get_aoi_path()
     manifest_path = os.path.join(aoi_path, 'manifest.json')
 
@@ -47,8 +52,9 @@ def get_current_aoi_bbox() -> List[float]:
     with open(manifest_path) as f:
         manifest = json.load(f)
         bbox = manifest['bbox']
+        description = manifest['description']
         # bbox is of the form [w, s, e, n]
-        return bbox
+        return {'bbox': bbox, 'description': description}
 
 
 def get_local_aoi_path() -> str:

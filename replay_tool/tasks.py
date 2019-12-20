@@ -26,7 +26,7 @@ from .utils.osmium_handlers import (
 from .utils.common import (
     get_aoi_path,
     get_original_aoi_path,
-    get_current_aoi_bbox,
+    get_current_aoi_info,
     get_current_aoi_path,
     get_overpass_query,
     filter_elements_from_aoi_handler,
@@ -155,7 +155,7 @@ def get_local_aoi_extract():
     curr_state=ReplayTool.STATUS_EXTRACTING_UPSTREAM_AOI
 )
 def get_current_aoi_extract():
-    [w, s, e, n] = get_current_aoi_bbox()
+    [w, s, e, n] = get_current_aoi_info()['bbox']
     overpass_query = get_overpass_query(s, w, n, e)
     response = requests.get(OVERPASS_API_URL, data={'data': overpass_query})
 

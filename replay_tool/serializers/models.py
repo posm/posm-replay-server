@@ -3,7 +3,7 @@ from rest_framework import serializers
 from replay_tool.models import ReplayTool, LocalChangeSet, ConflictingOSMElement
 
 from replay_tool.utils.common import (
-    get_current_aoi_bbox, get_aoi_name,
+    get_current_aoi_info, get_aoi_name,
     get_aoi_created_datetime,
 )
 
@@ -16,9 +16,11 @@ class ReplayToolSerializer(serializers.ModelSerializer):
         exclude = ('elements_data',)
 
     def get_aoi(self, obj):
+        aoi_info = get_current_aoi_info()
         return {
             'name': get_aoi_name(exception_if_not_set=True),
-            'bounds': get_current_aoi_bbox(),
+            'bounds': aoi_info['bbox'],
+            'description': aoi_info['description'],
             'date_cloned': get_aoi_created_datetime(),
             'total_conflicting_elements': ConflictingOSMElement.objects.filter(
                 is_resolved=False
