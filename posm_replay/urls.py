@@ -23,6 +23,7 @@ from replay_tool.views import (
     ConflictsViewSet,
     trigger,
     retrigger,
+    reset,
 )
 
 
@@ -35,6 +36,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/v1/replay-tool/', ReplayToolView.as_view()),
     path('api/v1/trigger/', trigger),
+    path('api/v1/reset/', reset),
     path('api/v1/re-trigger/', retrigger),
     path('api/v1/', include(router.urls)),
 ]

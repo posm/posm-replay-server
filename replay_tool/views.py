@@ -1,4 +1,5 @@
-from rest_framework.decorators import api_view
+from django.shortcuts import get_object_or_404
+from rest_framework.decorators import api_view, action
 from rest_framework.views import APIView
 from rest_framework import viewsets
 from rest_framework.response import Response
@@ -12,6 +13,10 @@ from .serializers.models import (
     ConflictingOSMElementSerializer,
     MiniConflictingOSMElementSerializer,
 )
+
+META_KEYS = [
+    'id', 'uid', 'user', 'version', 'location', 'changeset', 'timestamp',
+]
 
 
 class ReplayToolView(APIView):
@@ -37,12 +42,61 @@ def retrigger(request):
     return Response({'message': 'Replay Tool has been successfully re-triggered.'})
 
 
+@api_view(['POST'])
+def reset(request):
+    ReplayTool.reset()
+    return Response({'message': 'Replay Tool has been successfully reset.'})
+
+
 class ConflictsViewSet(viewsets.ModelViewSet):
     queryset = conflicting_elements = ConflictingOSMElement.objects.filter(
-        local_state=ConflictingOSMElement.LOCAL_STATE_CONFLICTING
+        local_state=ConflictingOSMElement.LOCAL_STATE_CONFLICTING,
+        is_resolved=False,
     )
 
     def get_serializer_class(self):
         if self.action == 'list':
             return MiniConflictingOSMElementSerializer
         return ConflictingOSMElementSerializer
+
+    @action(
+        detail=True,
+        methods=['patch'],
+        url_path=r'update',
+    )
+    def update_element(self, request, pk=None):
+        osm_element = self.get_object()
+        data = self.validate_and_process_data(request.data)
+        curr_resolved_data = osm_element.resolved_data or {}
+        osm_element.resolved_data = {
+            **curr_resolved_data,
+            **data
+        }
+        osm_element.save()
+        return Response(ConflictingOSMElementSerializer(osm_element).data)
+
+    @action(
+        detail=True,
+        methods=['patch'],
+        url_path=r'resolve',
+    )
+    def resolve_element(self, request, pk=None):
+        osm_element = self.get_object()
+        data = self.validate_and_process_data(request.data)
+        curr_resolved_data = osm_element.resolved_data or {}
+        osm_element.resolved_data = {
+            **curr_resolved_data,
+            **data
+        }
+        osm_element.is_resolved = True
+        osm_element.save()
+        return Response(ConflictingOSMElementSerializer(osm_element).data)
+
+    def remove_meta_keys(self, data):
+        for key in META_KEYS:
+            data.pop(key, None)
+        return data
+
+    def validate_and_process_data(self, data):
+        data = self.remove_meta_keys(data)
+        return data
