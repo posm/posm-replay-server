@@ -59,6 +59,14 @@ def get_current_aoi_path() -> str:
     return os.path.join(get_aoi_path(), 'current_aoi.osm')
 
 
+def get_original_aoi_path() -> str:
+    aoi_path = get_aoi_path()
+    original_aoi_name = os.environ.get('ORIGINAL_AOI_NAME')
+    if not original_aoi_name:
+        raise Exception('ORIGINAL_AOI_NAME should be defined in the env')
+    return os.path.join(aoi_path, original_aoi_name)
+
+
 def get_overpass_query(s, w, n, e) -> str:
     return f'(node({s},{w},{n},{e});<;>>;>;);out meta;'
 

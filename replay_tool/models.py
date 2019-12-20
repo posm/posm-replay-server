@@ -113,6 +113,8 @@ class ConflictingOSMElement(models.Model):
     element_id = models.BigIntegerField()
     type = models.CharField(max_length=15, choices=CHOICES_TYPE)
 
+    original_geojson = JSONField(default=dict)
+
     local_data = JSONField(default=dict)
     local_geojson = JSONField(default=dict)
 
@@ -128,7 +130,7 @@ class ConflictingOSMElement(models.Model):
 
     def __str__(self):
         status = 'Resolved' if self.is_resolved else 'Conflicting'
-        return f'{self.type.title()} {self.node_id}: {status}'
+        return f'{self.type.title()} {self.element_id}: {status}'
 
     @classmethod
     @transaction.atomic

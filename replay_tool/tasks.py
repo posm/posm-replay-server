@@ -6,6 +6,8 @@ import tempfile
 import psycopg2
 import osm2geojson
 
+from django.db import transaction
+
 from celery import shared_task
 
 from .models import (
@@ -23,6 +25,7 @@ from .utils.osmium_handlers import (
 )
 from .utils.common import (
     get_aoi_path,
+    get_original_aoi_path,
     get_current_aoi_bbox,
     get_current_aoi_path,
     get_overpass_query,
@@ -101,11 +104,7 @@ def gather_changesets():
 
 
 def get_original_element_versions():
-    aoi_path = get_aoi_path()
-    original_aoi_name = os.environ.get('ORIGINAL_AOI_NAME')
-    if not original_aoi_name:
-        raise Exception('ORIGINAL_AOI_NAME should be defined in the env')
-    original_aoi_path = os.path.join(aoi_path, original_aoi_name)
+    original_aoi_path = get_original_aoi_path()
     version_handler = VersionHandler()
     version_handler.apply_file(original_aoi_path)
     return version_handler
@@ -188,8 +187,12 @@ def filter_referenced_elements_and_detect_conflicts():
     aoi_path = get_aoi_path()
     local_aoi_path = os.path.join(aoi_path, 'local_aoi.osm')
     current_aoi_path = os.path.join(aoi_path, 'current_aoi.osm')
+    original_aoi_path = get_original_aoi_path()
 
     tracker = track_elements_from_local_changesets()
+
+    original_aoi_handler = AOIHandler(tracker, '/tmp/original_referenced.osm')
+    original_aoi_handler.apply_file_and_cleanup(original_aoi_path)
 
     local_aoi_handler = AOIHandler(tracker, '/tmp/local_referenced.osm')
     local_aoi_handler.apply_file_and_cleanup(local_aoi_path)
@@ -270,38 +273,34 @@ def filter_referenced_elements_and_detect_conflicts():
         ConflictingOSMElement.objects.filter(type=elemtype[:-1], element_id__in=ids).\
             update(local_state=ConflictingOSMElement.LOCAL_STATE_CONFLICTING)
 
-    return local_aoi_handler, upstream_aoi_handler
+    return original_aoi_handler, local_aoi_handler, upstream_aoi_handler
 
 
 @set_error_status_on_exception(
     prev_state=ReplayTool.STATUS_DETECTING_CONFLICTS,
     curr_state=ReplayTool.STATUS_CREATING_GEOJSONS,
 )
-def generate_local_and_upstream_geojsons(local_ref_path, upstream_ref_path):
+def generate_all_geojsons(original_ref_path, local_ref_path, upstream_ref_path):
+    original_geojson = generate_geojsons(original_ref_path)
     local_geojson = generate_geojsons(local_ref_path)
     upstream_geojson = generate_geojsons(upstream_ref_path)
 
-    for feature in local_geojson['features']:
-        type = feature['properties']['type']
-        id = feature['properties']['id']
-        obj = ConflictingOSMElement.objects.get(element_id=id, type=type)
-        feature['properties'] = {
-            **feature['properties'],
-            **{k: v for k, v in obj.local_data.items() if k != 'location'}
-        }
-        obj.local_geojson = feature
-        obj.save()
+    @transaction.atomic
+    def _set_geojson(geojson, obj_attr):
+        for feature in geojson['features']:
+            type = feature['properties']['type']
+            id = feature['properties']['id']
+            obj = ConflictingOSMElement.objects.get(element_id=id, type=type)
+            feature['properties'] = {
+                **feature['properties'],
+                **{k: v for k, v in obj.local_data.items() if k != 'location'}
+            }
+            obj.__setattr__(obj_attr, feature)
+            obj.save()
 
-    for feature in upstream_geojson['features']:
-        type = feature['properties']['type']
-        id = feature['properties']['id']
-        obj = ConflictingOSMElement.objects.get(element_id=id, type=type)
-        feature['properties'] = {
-            **feature['properties'],
-            **{k: v for k, v in obj.upstream_data.items() if k != 'location'}
-        }
-        obj.upstream_geojson = feature
-        obj.save()
+    _set_geojson(original_geojson, 'original_geojson')
+    _set_geojson(local_geojson, 'local_geojson')
+    _set_geojson(upstream_geojson, 'upstream_geojson')
 
     return True
 
@@ -335,9 +334,14 @@ def task_prepare_data_for_replay_tool():
     logger.info("Got local aoi extract")
 
     logger.info("Filtering referenced elements")
-    local_handler, upstream_handler = filter_referenced_elements_and_detect_conflicts()
+    original_handler, local_handler, upstream_handler = \
+        filter_referenced_elements_and_detect_conflicts()
     logger.info("Filtered referenced elements")
 
     logger.info("Generating geojsons")
-    generate_local_and_upstream_geojsons(local_handler.ref_osm_path, upstream_handler.ref_osm_path)
+    generate_all_geojsons(
+        original_handler.ref_osm_path,
+        local_handler.ref_osm_path,
+        upstream_handler.ref_osm_path
+    )
     logger.info("Generated geojsons")
