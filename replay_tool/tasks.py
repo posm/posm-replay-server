@@ -36,6 +36,7 @@ from .utils.common import (
     get_overpass_query,
     filter_elements_from_aoi_handler,
     get_conflicting_elements,
+    replace_new_element_ids,
 
     # Typings
     FilteredElements,
@@ -120,6 +121,7 @@ def get_original_element_versions():
     curr_state=ReplayTool.STATUS_EXTRACTING_LOCAL_AOI
 )
 def get_local_aoi_extract():
+    return True
     db_user = os.environ.get('POSM_DB_USER')
     db_password = os.environ.get('POSM_DB_PASSWORD')
     osmosis_aoi_root = os.environ.get('OSMOSIS_AOI_ROOT')
@@ -160,6 +162,7 @@ def get_local_aoi_extract():
     curr_state=ReplayTool.STATUS_EXTRACTING_UPSTREAM_AOI
 )
 def get_current_aoi_extract():
+    return True
     [w, s, e, n] = get_current_aoi_info()['bbox']
     overpass_query = get_overpass_query(s, w, n, e)
     response = requests.get(OVERPASS_API_URL, data={'data': overpass_query})
@@ -317,12 +320,39 @@ def generate_geojsons(osmpath):
     return geojson
 
 
+# @set_error_status_on_exception(
+    # prev_state=ReplayTool.STATUS_RESOLVED,
+    # curr_state=ReplayTool.STATUS_PUSHED_UPSTREAM
+# )
 def create_and_push_changeset(comment=None):
     aoiname = get_aoi_name()
     comment = comment or f"Updates on POSM in area '{aoiname}'"
     # TODO: get version
     version = '1.1'
+
+    # Get added elements
+    added_nodes = OSMElement.get_added_elements('node')
+    added_ways = OSMElement.get_added_elements('way')
+    added_relations = OSMElement.get_added_elements('relation')
+
+    # Map ids, map of locally created elements ids and ids to be sent to upstream(negative values)
+    # The mapped ids will be used wherever the elements are referenced
+    new_nodes_ids_map = {x.element_id: -(i + 1) for i, x in enumerate(added_nodes)}
+    new_ways_ids_map = {x.element_id: -(i + 1) for i, x in enumerate(added_ways)}
+    new_relations_ids_map = {x.element_id: -(i + 1) for i, x in enumerate(added_relations)}
+
     changeset_id = create_changeset(comment, version)
+    for element in OSMElement.objects.all():
+        changeset_data = element.get_osm_change_data()
+        # The data does not have locally added elements ids set to negative
+        # So replace ids by negative ids if added
+        changeset_data = replace_new_element_ids(
+            changeset_data,
+            new_nodes_ids_map,
+            new_ways_ids_map,
+            new_relations_ids_map,
+        )
+        changeset_data['data']['changeset'] = changeset_id
     return changeset_id
 
 

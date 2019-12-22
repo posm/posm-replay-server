@@ -1,6 +1,6 @@
 from rest_framework.decorators import api_view, action
 from rest_framework.views import APIView
-from rest_framework import viewsets
+from rest_framework import viewsets, exceptions
 from rest_framework.response import Response
 
 
@@ -28,10 +28,9 @@ class ReplayToolView(APIView):
 def trigger(request):
     tool = ReplayTool.objects.get()
     if not tool.is_initiated:
-        ReplayTool.reset()
         task_prepare_data_for_replay_tool.delay()
         return Response({'message': 'ReplayTool has been successfully triggered.'})
-    raise Exception('Already triggered.')
+    raise exceptions.ValidationError('Already triggered.')
 
 
 @api_view(['POST'])
@@ -66,7 +65,8 @@ class ConflictsViewSet(viewsets.ModelViewSet):
         curr_resolved_data = osm_element.resolved_data or {}
         osm_element.resolved_data = {
             **curr_resolved_data,
-            **data
+            **data,
+            'id': osm_element.element_id
         }
         osm_element.save()
         return Response(OSMElementSerializer(osm_element).data)

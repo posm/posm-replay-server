@@ -7,6 +7,7 @@ from mypy_extensions import TypedDict
 
 
 class ChangeData(TypedDict):
+    type: str
     action: str
     data: dict
 
@@ -152,17 +153,29 @@ class OSMElement(models.Model):
         return f'{self.type.title()} {self.element_id}: {status}'
 
     @classmethod
-    def get_conflicting_elements(cls):
+    def get_conflicting_elements(cls, type=None):
+        typefilter = {} if type is None else {'type': type}
         return cls.objects.filter(
             local_state=cls.LOCAL_STATE_CONFLICTING,
             is_resolved=False,
+            **typefilter,
         )
 
     @classmethod
-    def get_resolved_elements(cls):
+    def get_resolved_elements(cls, type=None):
+        typefilter = {} if type is None else {'type': type}
         return cls.objects.filter(
             local_state=cls.LOCAL_STATE_CONFLICTING,
             is_resolved=True,
+            **typefilter,
+        )
+
+    @classmethod
+    def get_added_elements(cls, type=None):
+        typefilter = {} if type is None else {'type': type}
+        return cls.objects.filter(
+            local_state=cls.LOCAL_STATE_ADDED,
+            **typefilter,
         )
 
     @classmethod
@@ -179,26 +192,38 @@ class OSMElement(models.Model):
     def get_osm_change_data(self) -> ChangeData:
         """
         Returns change data(create, modify or delete)
-        And calculates the diff
+        And calculates the diff, and the version to be sent
         """
-        change_data: ChangeData = {'action': '', 'data': {}}
+        change_data: ChangeData = {'type': self.type, 'action': '', 'data': {}}
 
         original_data = self.original_geojson.get('properties', {})
         if self.local_state == self.LOCAL_STATE_ADDED:
             change_data['action'] = 'create'
             change_data['data'] = self.local_data
+            # Set version to 1
+            change_data['data']['version'] = 1
         elif self.local_state == self.LOCAL_STATE_DELETED:
             change_data['action'] = 'delete'
             change_data['data'] = self.local_data
+            change_data['data']['id'] = self.element_id  # Just in case id is not present
+            # Set version to 1 greater than upstream version
+            change_data['data']['version'] = self.upstream_data['version'] + 1
         elif self.local_state == self.LOCAL_STATE_MODIFIED:
             change_data['action'] = 'modify'
             change_data['data'] = get_osm_elems_diff(self.local_data, original_data)
+            # diff won't have id, so insert id
+            change_data['data']['id'] = self.element_id
+            # Set version to 1 greater than upstream version
+            change_data['data']['version'] = self.upstream_data['version'] + 1
         elif self.local_state == self.LOCAL_STATE_CONFLICTING:
             diff = get_osm_elems_diff(self.resolved_data, original_data)
             action = 'delete' if diff.get('deleted') else 'modify'
             change_data['action'] = action
-            original_data = self.original_geojson.get('properties', {})
-            change_data['data'] = get_osm_elems_diff(self.local_data, original_data)
+            change_data['data'] = diff
+            # diff won't have id, so insert id
+            change_data['data']['id'] = self.element_id
+            # Set version to 1 greater than upstream version
+            change_data['data']['version'] = self.upstream_data['version'] + 1
         else:
             raise Exception(f"Invalid value 'f{self.local_state}' for local state")
         return change_data

@@ -71,21 +71,25 @@ class AOIHandler(osmium.SimpleHandler):
         self._nodes[n.id] = n
         self.nodes_count += 1
         if n.id in self.tracker.referenced_elements['nodes'] or n.id in self.tracker.added_elements['nodes']:
-            self.writer.add_node(n)
             self.nodes[n.id] = NodeSerializer(n).data
+            # Write to writer to get osm file which is later converted to geojson
+            self.writer.add_node(n)
 
     def way(self, w):
         self._ways[w.id] = w
         self.ways_count += 1
         if w.id in self.tracker.referenced_elements['ways'] or w.id in self.tracker.added_elements['ways']:
+            self.ways[w.id] = WaySerializer(w).data
+            # Write to writer to get osm file which is later converted to geojson
             for node in w.nodes:
                 self.writer.add_node(self._nodes[node.ref])
             self.writer.add_way(w)
-            self.ways[w.id] = WaySerializer(w).data
 
     def relation(self, r):
         self.relations_count += 1
         if r.id in self.tracker.referenced_elements['relations'] or r.id in self.tracker.added_elements['relations']:
+            self.relations[r.id] = RelationSerializer(r).data
+            # Write to writer to get osm file which is later converted to geojson
             for member in r.members:
                 if member.type == 'way':
                     for node in self._ways[member.ref].nodes:
@@ -93,8 +97,8 @@ class AOIHandler(osmium.SimpleHandler):
                     self.writer.add_way(self._ways[member.ref])
                 elif member.type == 'node':
                     self.writer.add_node(self._nodes[member.ref])
+                # TODO: member.type == 'relation'
             self.writer.add_relation(r)
-            self.relations[r.id] = RelationSerializer(r).data
 
 
 class OSMElementsTracker:
