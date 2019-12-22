@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from replay_tool.models import ReplayTool, LocalChangeSet, ConflictingOSMElement
+from replay_tool.models import ReplayTool, LocalChangeSet, OSMElement
 
 from replay_tool.utils.common import (
     get_current_aoi_info, get_aoi_name,
@@ -22,20 +22,19 @@ class ReplayToolSerializer(serializers.ModelSerializer):
             'bounds': aoi_info['bbox'],
             'description': aoi_info['description'],
             'date_cloned': get_aoi_created_datetime(),
-            'total_conflicting_elements': ConflictingOSMElement.objects.filter(
-                is_resolved=False
-            ).count(),
+            'total_conflicting_elements': OSMElement.get_conflicting_elements().count(),
+            'total_resolved_elements': OSMElement.get_resolved_elements().count(),
             'local_changesets_count': LocalChangeSet.objects.count(),
             'local_elements_count': obj.elements_data.get('local'),
             'upstream_elements_count': obj.elements_data.get('upstream'),
         }
 
 
-class ConflictingOSMElementSerializer(serializers.ModelSerializer):
+class OSMElementSerializer(serializers.ModelSerializer):
     current_geojson = serializers.SerializerMethodField()
 
     class Meta:
-        model = ConflictingOSMElement
+        model = OSMElement
         exclude = ('resolved_data', 'local_data', 'upstream_data')
 
     def get_current_geojson(self, obj):
@@ -45,11 +44,11 @@ class ConflictingOSMElementSerializer(serializers.ModelSerializer):
         return geojson
 
 
-class MiniConflictingOSMElementSerializer(serializers.ModelSerializer):
+class MiniOSMElementSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
 
     class Meta:
-        model = ConflictingOSMElement
+        model = OSMElement
         fields = ('id', 'element_id', 'type', 'name')
 
     def get_name(self, obj):

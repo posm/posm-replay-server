@@ -17,8 +17,9 @@ Response
             27.682648488328013
         ],
         "description": "Map of jawalakhel",
-        "dateCloned": "2019-12-19T09:39:50.023973",
-        "totalConflictingElements": 12,
+        "dateCloned": "2019-12-22T09:51:04.089626",
+        "totalConflictingElements": 1,
+        "totalResolvedElements": 0,
         "localChangesetsCount": 6,
         "localElementsCount": {
             "waysCount": 6062,
@@ -31,7 +32,7 @@ Response
             "relationsCount": 48
         }
     },
-    "state": "creating_geojsons",
+    "state": "conflicts",
     "isCurrentStateComplete": true,
     "hasErrored": false
 }

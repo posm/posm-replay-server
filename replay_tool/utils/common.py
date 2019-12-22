@@ -212,3 +212,22 @@ def get_conflicting_elements(
         ),
     }
     return conflicting_elems
+
+
+def create_changeset_creation_xml(comment: str, tool_version: str = '1.1') -> str:
+    return f'''<?xml version="1.0" encoding="UTF-8"?>
+        <osm version="0.6" generator="POSM Replay Tool v{tool_version}">
+        <changeset>
+            <tag k="comment" v="{comment}" />
+        </changeset>
+    </osm>'''
+
+
+def get_osm_elems_diff(a: dict, b: dict) -> dict:
+    tagsa = {x['k']: x['v'] for x in a.pop('tags', [])}
+    tagsb = {x['k']: x['v'] for x in b.pop('tags', [])}
+    tags_diff = {k: v for k, v in tagsa.items() if v != tagsb.get(k)}
+    tags = [{'k': k, 'v': v} for k, v in tags_diff.items()]
+    attrs_diff = {k: v for k, v in a.items() if v != b.get(k)}
+
+    return {**attrs_diff, 'tags': tags}

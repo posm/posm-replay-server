@@ -1,4 +1,3 @@
-from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view, action
 from rest_framework.views import APIView
 from rest_framework import viewsets
@@ -7,11 +6,11 @@ from rest_framework.response import Response
 
 from .tasks import task_prepare_data_for_replay_tool
 
-from .models import ReplayTool, ConflictingOSMElement
+from .models import ReplayTool, OSMElement
 from .serializers.models import (
     ReplayToolSerializer,
-    ConflictingOSMElementSerializer,
-    MiniConflictingOSMElementSerializer,
+    OSMElementSerializer,
+    MiniOSMElementSerializer,
 )
 
 META_KEYS = [
@@ -32,7 +31,7 @@ def trigger(request):
         ReplayTool.reset()
         task_prepare_data_for_replay_tool.delay()
         return Response({'message': 'ReplayTool has been successfully triggered.'})
-    return Response({'message': 'Replay Tool has already been triggered.'})
+    raise Exception('Already triggered.')
 
 
 @api_view(['POST'])
@@ -49,15 +48,12 @@ def reset(request):
 
 
 class ConflictsViewSet(viewsets.ModelViewSet):
-    queryset = conflicting_elements = ConflictingOSMElement.objects.filter(
-        local_state=ConflictingOSMElement.LOCAL_STATE_CONFLICTING,
-        is_resolved=False,
-    )
+    queryset = OSMElement.get_conflicting_elements()
 
     def get_serializer_class(self):
         if self.action == 'list':
-            return MiniConflictingOSMElementSerializer
-        return ConflictingOSMElementSerializer
+            return MiniOSMElementSerializer
+        return OSMElementSerializer
 
     @action(
         detail=True,
@@ -73,7 +69,7 @@ class ConflictsViewSet(viewsets.ModelViewSet):
             **data
         }
         osm_element.save()
-        return Response(ConflictingOSMElementSerializer(osm_element).data)
+        return Response(OSMElementSerializer(osm_element).data)
 
     @action(
         detail=True,
@@ -90,7 +86,11 @@ class ConflictsViewSet(viewsets.ModelViewSet):
         }
         osm_element.is_resolved = True
         osm_element.save()
-        return Response(ConflictingOSMElementSerializer(osm_element).data)
+        if OSMElement.get_conflicting_elements().count() == 0:
+            replay_tool = ReplayTool.objects.get()
+            replay_tool.state = ReplayTool.STATUS_RESOLVED
+            replay_tool.save()
+        return Response(OSMElementSerializer(osm_element).data)
 
     def remove_meta_keys(self, data):
         for key in META_KEYS:

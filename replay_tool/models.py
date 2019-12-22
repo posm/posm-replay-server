@@ -1,19 +1,28 @@
 from django.db import models, transaction
 from django.contrib.postgres.fields import JSONField
 
+from .utils.common import get_osm_elems_diff
+
+from mypy_extensions import TypedDict
+
+
+class ChangeData(TypedDict):
+    action: str
+    data: dict
+
 
 class ReplayTool(models.Model):
     """Singleton model that stores state of replay tool"""
-    STATUS_NOT_TRIGGERRED = 'not_triggered'  # Step 0, initial state
-    STATUS_GATHERING_CHANGESETS = 'gathering_changesets'  # Step 1
-    STATUS_EXTRACTING_UPSTREAM_AOI = 'extracting_upstream_aoi'  # Step 2
-    STATUS_EXTRACTING_LOCAL_AOI = 'extracting_local_aoi'  # Step 3
-    STATUS_DETECTING_CONFLICTS = 'detecting_conflicts'  # Step 4
-    STATUS_CREATING_GEOJSONS = 'creating_geojsons'  # Step 5
-    STATUS_CONFLICTS = 'conflicts'
-    STATUS_RESOLVED = 'resolved'
-    STATUS_PUSH_CONFLICTS = 'push_conflicts'
-    STATUS_PUSHED_UPSTREAM = 'pushed_upstream'
+    STATUS_NOT_TRIGGERRED = 'not_triggered'  # State 0, initial state
+    STATUS_GATHERING_CHANGESETS = 'gathering_changesets'  # State 1
+    STATUS_EXTRACTING_UPSTREAM_AOI = 'extracting_upstream_aoi'  # State 2
+    STATUS_EXTRACTING_LOCAL_AOI = 'extracting_local_aoi'  # State 3
+    STATUS_DETECTING_CONFLICTS = 'detecting_conflicts'  # State 4
+    STATUS_CREATING_GEOJSONS = 'creating_geojsons'  # State 5
+    STATUS_CONFLICTS = 'conflicts'  # State 6
+    STATUS_RESOLVED = 'resolved'  # State 6
+    STATUS_PUSH_CONFLICTS = 'pushing_conflicts'  # State 7
+    STATUS_PUSHED_UPSTREAM = 'pushed_upstream'  # State 8
 
     CHOICES_STATUS = (
         (STATUS_NOT_TRIGGERRED, 'Not Triggered'),
@@ -56,8 +65,18 @@ class ReplayTool(models.Model):
         r.has_errored = False
         # Delete other items
         LocalChangeSet.objects.all().delete()
-        ConflictingOSMElement.objects.all().delete()
+        OSMElement.objects.all().delete()
         r.save()
+
+    def set_next_state(self):
+        total_steps = 6
+        state_map = {i: k[0] for i, k in enumerate(self.CHOICES_STATUS)}
+        rev_map = {v: k for k, v in state_map.items()}
+        curr_state = self.state
+        num = rev_map[curr_state]
+        next_step = (num + 1) % total_steps
+        self.state = state_map[next_step]
+        self.save()
 
     def save(self, *args, **kwargs):
         # Just allow single instance
@@ -88,7 +107,7 @@ class LocalChangeSet(models.Model):
         return f'Local Changeset # {self.changeset_id}'
 
 
-class ConflictingOSMElement(models.Model):
+class OSMElement(models.Model):
     TYPE_NODE = 'node'
     TYPE_WAY = 'way'
     TYPE_RELATION = 'relation'
@@ -122,7 +141,7 @@ class ConflictingOSMElement(models.Model):
     upstream_geojson = JSONField(default=dict)
 
     resolved_data = JSONField(default=dict, null=True, blank=True)
-    is_resolved = models.BooleanField(default=False)
+    is_resolved = models.BooleanField(default=True)
     local_state = models.CharField(max_length=15, choices=CHOICES_LOCAL_STATE)
 
     class Meta:
@@ -131,6 +150,20 @@ class ConflictingOSMElement(models.Model):
     def __str__(self):
         status = 'Resolved' if self.is_resolved else 'Conflicting'
         return f'{self.type.title()} {self.element_id}: {status}'
+
+    @classmethod
+    def get_conflicting_elements(cls):
+        return cls.objects.filter(
+            local_state=cls.LOCAL_STATE_CONFLICTING,
+            is_resolved=False,
+        )
+
+    @classmethod
+    def get_resolved_elements(cls):
+        return cls.objects.filter(
+            local_state=cls.LOCAL_STATE_CONFLICTING,
+            is_resolved=True,
+        )
 
     @classmethod
     @transaction.atomic
@@ -142,3 +175,30 @@ class ConflictingOSMElement(models.Model):
                 local_data=loc,
                 upstream_data=aoi,
             )
+
+    def get_osm_change_data(self) -> ChangeData:
+        """
+        Returns change data(create, modify or delete)
+        And calculates the diff
+        """
+        change_data: ChangeData = {'action': '', 'data': {}}
+
+        original_data = self.original_geojson.get('properties', {})
+        if self.local_state == self.LOCAL_STATE_ADDED:
+            change_data['action'] = 'create'
+            change_data['data'] = self.local_data
+        elif self.local_state == self.LOCAL_STATE_DELETED:
+            change_data['action'] = 'delete'
+            change_data['data'] = self.local_data
+        elif self.local_state == self.LOCAL_STATE_MODIFIED:
+            change_data['action'] = 'modify'
+            change_data['data'] = get_osm_elems_diff(self.local_data, original_data)
+        elif self.local_state == self.LOCAL_STATE_CONFLICTING:
+            diff = get_osm_elems_diff(self.resolved_data, original_data)
+            action = 'delete' if diff.get('deleted') else 'modify'
+            change_data['action'] = action
+            original_data = self.original_geojson.get('properties', {})
+            change_data['data'] = get_osm_elems_diff(self.local_data, original_data)
+        else:
+            raise Exception(f"Invalid value 'f{self.local_state}' for local state")
+        return change_data

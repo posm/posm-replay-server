@@ -12,11 +12,15 @@ from celery import shared_task
 
 from .models import (
     ReplayTool, LocalChangeSet,
-    ConflictingOSMElement,
+    OSMElement,
 )
 
 from .utils.decorators import set_error_status_on_exception
-from .utils.osm_api import get_changeset_data, get_changeset_meta
+from .utils.osm_api import (
+    get_changeset_data,
+    get_changeset_meta,
+    create_changeset,
+)
 from .utils.osmium_handlers import (
     OSMElementsTracker,
     ElementsFilterHandler,
@@ -25,6 +29,7 @@ from .utils.osmium_handlers import (
 )
 from .utils.common import (
     get_aoi_path,
+    get_aoi_name,
     get_original_aoi_path,
     get_current_aoi_info,
     get_current_aoi_path,
@@ -237,30 +242,30 @@ def filter_referenced_elements_and_detect_conflicts():
 
     for elemtype, elems in local_modified_elements.items():
         for elem in elems:
-            ConflictingOSMElement.objects.create(
+            OSMElement.objects.create(
                 type=elemtype[:-1],  # the elemtype is plural: nodes, ways, etc but type is singular
                 element_id=elem['id'],
                 local_data=elem,
                 upstream_data=upstream_modified_elements_map[elemtype][elem['id']],
-                local_state=ConflictingOSMElement.LOCAL_STATE_MODIFIED,
+                local_state=OSMElement.LOCAL_STATE_MODIFIED,
             )
 
     for elemtype, elems in local_added_elements.items():
         for elem in elems:
-            ConflictingOSMElement.objects.create(
+            OSMElement.objects.create(
                 type=elemtype[:-1],  # the elemtype is plural: nodes, ways, etc but type is singular
                 element_id=elem['id'],
                 local_data=elem,
-                local_state=ConflictingOSMElement.LOCAL_STATE_ADDED,
+                local_state=OSMElement.LOCAL_STATE_ADDED,
             )
 
     for elemtype, elems in local_deleted_elements.items():
         for elem in elems:
-            ConflictingOSMElement.objects.create(
+            OSMElement.objects.create(
                 type=elemtype[:-1],  # the elemtype is plural: nodes, ways, etc but type is singular
                 element_id=elem['id'],
                 local_data=elem,
-                local_state=ConflictingOSMElement.LOCAL_STATE_DELETED
+                local_state=OSMElement.LOCAL_STATE_DELETED
             )
 
     conflicting_elements: ConflictingElements = get_conflicting_elements(
@@ -270,8 +275,8 @@ def filter_referenced_elements_and_detect_conflicts():
     )
 
     for elemtype, ids in conflicting_elements.items():
-        ConflictingOSMElement.objects.filter(type=elemtype[:-1], element_id__in=ids).\
-            update(local_state=ConflictingOSMElement.LOCAL_STATE_CONFLICTING)
+        OSMElement.objects.filter(type=elemtype[:-1], element_id__in=ids).\
+            update(is_resolved=False, local_state=OSMElement.LOCAL_STATE_CONFLICTING)
 
     return original_aoi_handler, local_aoi_handler, upstream_aoi_handler
 
@@ -290,7 +295,7 @@ def generate_all_geojsons(original_ref_path, local_ref_path, upstream_ref_path):
         for feature in geojson['features']:
             type = feature['properties']['type']
             id = feature['properties']['id']
-            obj = ConflictingOSMElement.objects.get(element_id=id, type=type)
+            obj = OSMElement.objects.get(element_id=id, type=type)
             feature['properties'] = {
                 **feature['properties'],
                 **{k: v for k, v in obj.local_data.items() if k != 'location'}
@@ -310,6 +315,15 @@ def generate_geojsons(osmpath):
         xml = f.read()
     geojson = osm2geojson.xml2geojson(xml)
     return geojson
+
+
+def create_and_push_changeset(comment=None):
+    aoiname = get_aoi_name()
+    comment = comment or f"Updates on POSM in area '{aoiname}'"
+    # TODO: get version
+    version = '1.1'
+    changeset_id = create_changeset(comment, version)
+    return changeset_id
 
 
 @shared_task
@@ -345,3 +359,11 @@ def task_prepare_data_for_replay_tool():
         upstream_handler.ref_osm_path
     )
     logger.info("Generated geojsons")
+    replay_tool = ReplayTool.objects.get()
+    if OSMElement.get_conflicting_elements().count() > 0:
+        logger.info("Conflicts detected")
+        replay_tool.state = replay_tool.STATUS_CONFLICTS
+    else:
+        logger.info("No conflicts detected")
+        replay_tool.state = replay_tool.STATUS_RESOLVED
+    replay_tool.save()
