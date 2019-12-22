@@ -1,15 +1,6 @@
 from rest_framework import serializers
 
 
-from replay_tool.models import ReplayTool
-
-
-class ReplayToolSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ReplayTool
-        fields = '__all__'
-
-
 class LocationSerializer(serializers.Serializer):
     lat = serializers.FloatField()
     lon = serializers.FloatField()
@@ -40,8 +31,6 @@ class NodeSerializer(BaseElementSerializer):
 
 class NodeRefSerializer(serializers.Serializer):
     ref = serializers.IntegerField()
-    x = serializers.IntegerField()
-    y = serializers.IntegerField()
 
 
 class WaySerializer(BaseElementSerializer):

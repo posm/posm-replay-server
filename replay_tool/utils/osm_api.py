@@ -5,7 +5,7 @@ from typing import Optional
 
 
 def get_changeset_meta(changeset_id) -> Optional[str]:
-    osm_base_url = os.environ.get('OSM_BASE_URL', 'http://localhost:3000')
+    osm_base_url = os.environ.get('OSM_BASE_URL')
     meta_url = f'{osm_base_url}/api/0.6/changeset/{changeset_id}'
     response = requests.get(meta_url)
     status_code = response.status_code

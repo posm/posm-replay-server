@@ -14,23 +14,29 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path
 from django.urls import path, include
 
 from rest_framework import routers
 
 from replay_tool.views import (
-    CurrentAOIView,
-    ReplayToolViewSet,
+    ReplayToolView,
+    ConflictsViewSet,
+    trigger,
+    retrigger,
+    reset,
 )
 
 
 router = routers.DefaultRouter()
 
-router.register(r'replay-tool', ReplayToolViewSet, basename='replay_tool')
+router.register('conflicts', ConflictsViewSet, basename='conflicts')
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/v1/current-aoi/', CurrentAOIView.as_view()),
+    path('api/v1/replay-tool/', ReplayToolView.as_view()),
+    path('api/v1/trigger/', trigger),
+    path('api/v1/reset/', reset),
+    path('api/v1/re-trigger/', retrigger),
     path('api/v1/', include(router.urls)),
 ]

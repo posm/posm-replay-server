@@ -7,6 +7,7 @@ POSM_DB_USER=osm
 POSM_DB_PASSWORD=whynotposm
 AOI_ROOT=/aoi
 AOI_NAME=Jawalakhel
+ORIGINAL_AOI_NAME=jawalakhel.pbf
 
 # For osmosis, because it is run outside docker
 OSMOSIS_DB_HOST=posm.io
