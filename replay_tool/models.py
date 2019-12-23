@@ -1,6 +1,8 @@
 from django.db import models, transaction
 from django.contrib.postgres.fields import JSONField
 
+from copy import deepcopy
+
 from .utils.common import get_osm_elems_diff
 
 from mypy_extensions import TypedDict
@@ -199,12 +201,12 @@ class OSMElement(models.Model):
         original_data = self.original_geojson.get('properties', {})
         if self.local_state == self.LOCAL_STATE_ADDED:
             change_data['action'] = 'create'
-            change_data['data'] = self.local_data
+            change_data['data'] = {k: v for k, v in self.local_data.items() if k != 'location'}
             # Set version to 1
             change_data['data']['version'] = 1
         elif self.local_state == self.LOCAL_STATE_DELETED:
             change_data['action'] = 'delete'
-            change_data['data'] = self.local_data
+            change_data['data'] = {k: v for k, v in self.local_data.items() if k != 'location'}
             change_data['data']['id'] = self.element_id  # Just in case id is not present
             # Set version to 1 greater than upstream version
             change_data['data']['version'] = self.upstream_data['version'] + 1
@@ -226,4 +228,10 @@ class OSMElement(models.Model):
             change_data['data']['version'] = self.upstream_data['version'] + 1
         else:
             raise Exception(f"Invalid value 'f{self.local_state}' for local state")
+
+        if self.type == 'node':
+            change_data['data'].pop('location', None)
+            # Add lat/lon. In db they are inside location dict, for changeset, take them out.
+            change_data['data']['lat'] = self.local_data['location']['lat']
+            change_data['data']['lon'] = self.local_data['location']['lon']
         return change_data
