@@ -301,8 +301,8 @@ def generate_all_geojsons(original_ref_path, local_ref_path, upstream_ref_path):
             id = feature['properties']['id']
             obj = OSMElement.objects.get(element_id=id, type=type)
             feature['properties'] = {
+                # **{k: v for k, v in obj.local_data.items() if k != 'location'},
                 **feature['properties'],
-                **{k: v for k, v in obj.local_data.items() if k != 'location'}
             }
             obj.__setattr__(obj_attr, feature)
             obj.save()

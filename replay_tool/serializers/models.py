@@ -1,11 +1,21 @@
 from rest_framework import serializers
 
 from replay_tool.models import ReplayTool, LocalChangeSet, OSMElement
+from copy import deepcopy
 
 from replay_tool.utils.common import (
     get_current_aoi_info, get_aoi_name,
     get_aoi_created_datetime,
 )
+
+
+def transform_tags(tags):
+    if isinstance(tags, dict):
+        return tags
+    elif isinstance(tags, list):
+        return {x['k']: x['v'] for x in tags}
+    else:
+        raise Exception('Invalid tags')
 
 
 class ReplayToolSerializer(serializers.ModelSerializer):
@@ -32,16 +42,28 @@ class ReplayToolSerializer(serializers.ModelSerializer):
 
 class OSMElementSerializer(serializers.ModelSerializer):
     current_geojson = serializers.SerializerMethodField()
+    name = serializers.SerializerMethodField()
 
     class Meta:
         model = OSMElement
         exclude = ('resolved_data', 'local_data', 'upstream_data')
 
     def get_current_geojson(self, obj):
-        geojson = dict(obj.local_geojson)
-        properties = obj.resolved_data
+        geojson = deepcopy(obj.local_geojson)
+        # If there is not resolved data, send local data
+        # Because initially revolved_data and local data are same
+        # After conflicting element is partially updated, data is available in
+        # 'resolved_data' field
+        properties = obj.resolved_data or deepcopy(obj.local_data)
+        properties['tags'] = transform_tags(properties.get('tags'))
         geojson['properties'] = properties
         return geojson
+
+    def get_name(self, obj):
+        tags = {x['k']: x['v'] for x in obj.local_data.get('tags', [])}
+        if not tags or not tags.get('name'):
+            return f'{obj.type} id {obj.element_id}'
+        return tags['name']
 
 
 class MiniOSMElementSerializer(serializers.ModelSerializer):

@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 from django.db import models, transaction
 from django.contrib.postgres.fields import JSONField
 
