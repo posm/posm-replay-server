@@ -21,7 +21,7 @@ from .utils.osm_api import (
     get_changeset_meta,
     create_changeset,
 )
-from .utils.transformations import convert_to_osm_change_xml
+from .utils.transformations import ChangesetsToXMLWriter
 from .utils.osmium_handlers import (
     OSMElementsTracker,
     ElementsFilterHandler,
@@ -343,7 +343,7 @@ def create_and_push_changeset(comment=None):
     new_relations_ids_map = {x.element_id: -(i + 1) for i, x in enumerate(added_relations)}
 
     changeset_id = create_changeset(comment, version)
-    changeset_xml = b''
+    changeset_writer = ChangesetsToXMLWriter()
     for element in OSMElement.objects.all():
         changeset_data = element.get_osm_change_data()
         # The data does not have locally added elements ids set to negative
@@ -355,8 +355,9 @@ def create_and_push_changeset(comment=None):
             new_relations_ids_map,
         )
         changeset_data['data']['changeset'] = changeset_id
-        changeset_xml += convert_to_osm_change_xml(changeset_data)
-    print(changeset_xml)
+        changeset_writer.add_change(changeset_data)
+    print(changeset_writer.get_xml())
+    # TODO: send to OSM
     return changeset_id
 
 

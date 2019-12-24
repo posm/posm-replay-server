@@ -6,16 +6,8 @@ from copy import deepcopy
 from replay_tool.utils.common import (
     get_current_aoi_info, get_aoi_name,
     get_aoi_created_datetime,
+    transform_tags_to_dict,
 )
-
-
-def transform_tags(tags):
-    if isinstance(tags, dict):
-        return tags
-    elif isinstance(tags, list):
-        return {x['k']: x['v'] for x in tags}
-    else:
-        raise Exception('Invalid tags')
 
 
 class ReplayToolSerializer(serializers.ModelSerializer):
@@ -55,7 +47,7 @@ class OSMElementSerializer(serializers.ModelSerializer):
         # After conflicting element is partially updated, data is available in
         # 'resolved_data' field
         properties = obj.resolved_data or deepcopy(obj.local_data)
-        properties['tags'] = transform_tags(properties.get('tags'))
+        properties['tags'] = transform_tags_to_dict(properties.get('tags', []))
         geojson['properties'] = properties
         return geojson
 

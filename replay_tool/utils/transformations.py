@@ -1,6 +1,6 @@
 from xml.etree import ElementTree as ET
 
-from typing import List, Dict, Union
+from typing import Dict, Union
 
 
 StrOrInt = Union[str, int]
@@ -8,7 +8,12 @@ StrOrInt = Union[str, int]
 
 def create_obj_attrs(elem: ET.Element, data: Dict[str, StrOrInt]) -> ET.Element:
     for k, v in data.items():
-        elem.set(k, str(v))
+        if isinstance(v, list):
+            for x in v:
+                se = ET.SubElement(elem, k[:-1])  # k[:-1] : tags -> tag, etc
+                create_obj_attrs(se, x)
+        else:
+            elem.set(k, str(v))
     return elem
 
 
@@ -18,11 +23,30 @@ def convert_to_osm_change_xml(change_data: dict) -> str:
     elem_type = change_data['type']
     root = ET.Element(action)
     element = ET.SubElement(root, elem_type)
-    for k, v in change_data['data'].items():
-        if isinstance(v, list):
-            for x in v:
-                se = ET.SubElement(element, k[:-1])  # k[:-1] : tags -> tag, etc
-                create_obj_attrs(se, x)
-        else:
-            element.set(k, str(v))
+
+    create_obj_attrs(element, change_data['data'])
+
     return ET.tostring(root, encoding='utf-8',)
+
+
+class ChangesetsToXMLWriter:
+    def __init__(self):
+        self.root = ET.Element('osmChange')
+        self.create_el = ET.SubElement(self.root, 'create')
+        self.modify_el = ET.SubElement(self.root, 'modify')
+        self.delete_el = ET.SubElement(self.root, 'delete')
+
+    def add_change(self, change: dict) -> None:
+        action = change['action']
+        if action == 'modify':
+            obj_el = ET.SubElement(self.modify_el, change['type'])
+        elif action == 'create':
+            obj_el = ET.SubElement(self.create_el, change['type'])
+        elif action == 'delete':
+            obj_el = ET.SubElement(self.delete_el, change['type'])
+        else:
+            raise Exception(f'Invalid action "{action}"')
+        create_obj_attrs(obj_el, change['data'])
+
+    def get_xml(self) -> str:
+        return ET.tostring(self.root, encoding='utf-8')

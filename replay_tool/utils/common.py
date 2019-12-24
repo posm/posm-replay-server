@@ -227,9 +227,18 @@ def create_changeset_creation_xml(comment: str, tool_version: str = '1.1') -> st
     </osm>'''
 
 
+def transform_tags_to_dict(tags):
+    if isinstance(tags, dict):
+        return tags
+    elif isinstance(tags, list):
+        return {x['k']: x['v'] for x in tags}
+    else:
+        raise Exception('Invalid tags')
+
+
 def get_osm_elems_diff(a: dict, b: dict) -> dict:
-    tagsa = {x['k']: x['v'] for x in a.get('tags', [])}
-    tagsb = {x['k']: x['v'] for x in b.get('tags', [])}
+    tagsa = transform_tags_to_dict(a.get('tags', []))
+    tagsb = transform_tags_to_dict(b.get('tags', []))
     tags_diff = {k: v for k, v in tagsa.items() if v != tagsb.get(k)}
     tags = [{'k': k, 'v': v} for k, v in tags_diff.items()]
     attrs_diff = {k: v for k, v in a.items() if v != b.get(k) and k != 'tags'}
