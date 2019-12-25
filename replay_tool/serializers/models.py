@@ -33,12 +33,12 @@ class ReplayToolSerializer(serializers.ModelSerializer):
 
 
 class OSMElementSerializer(serializers.ModelSerializer):
-    current_geojson = serializers.SerializerMethodField()
+    # current_geojson = serializers.SerializerMethodField()
     name = serializers.SerializerMethodField()
 
     class Meta:
         model = OSMElement
-        exclude = ('resolved_data', 'local_data', 'upstream_data')
+        exclude = ('local_data', 'upstream_data')
 
     def get_current_geojson(self, obj):
         geojson = deepcopy(obj.local_geojson)
