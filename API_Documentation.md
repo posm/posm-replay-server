@@ -100,14 +100,8 @@ When the step *creating_geojsons* is complete, one can now ask for conflicts and
         },
         "properties": {
             "tags": [
-                {
-                    "k": "name",
-                    "v": "Bir Hospital"
-                },
-                {
-                    "k": "name:en",
-                    "v": "Bir Hospital बीर अस्पताल प्रवेश द्वार ७"
-                }
+                "name": "Bir Hospital",
+                "name:en": "Bir Hospital",
             ],
             "deleted": false,
             "visible": true
@@ -128,14 +122,8 @@ When the step *creating_geojsons* is complete, one can now ask for conflicts and
             "id": 31232256,
             "uid": 864593,
             "tags": [
-                {
-                    "k": "name",
-                    "v": "Bir Hospital"
-                },
-                {
-                    "k": "name:en",
-                    "v": "Bir Hospital बीर अस्पताल प्रवेश द्वार ७"
-                }
+                "name": "Bir Hospital",
+                "name:en": "Bir Hospital",
             ],
             "type": "node",
             "user": "Sazal(Solaris)",
@@ -159,14 +147,8 @@ When the step *creating_geojsons* is complete, one can now ask for conflicts and
             "id": 31232256,
             "uid": 864593,
             "tags": [
-                {
-                    "k": "name",
-                    "v": "Bir Hospital"
-                },
-                {
-                    "k": "name:en",
-                    "v": "Bir Hospital बीर अस्पताल प्रवेश द्वार ७"
-                }
+                "name": "Bir Hospital",
+                "name:en": "Bir Hospital",
             ],
             "type": "node",
             "user": "Sazal(Solaris)",
@@ -190,14 +172,8 @@ When the step *creating_geojsons* is complete, one can now ask for conflicts and
             "id": 31232256,
             "uid": 864593,
             "tags": [
-                {
-                    "k": "name",
-                    "v": "Bir Hospital"
-                },
-                {
-                    "k": "name:en",
-                    "v": "Bir Hospital बीर अस्पताल प्रवेश द्वार ७"
-                }
+                "name": "Bir Hospital",
+                "name:en": "Bir Hospital",
             ],
             "type": "node",
             "user": "Sazal(Solaris)",
@@ -225,19 +201,13 @@ Note that all the data for the element resides in the *properties* key inside ge
 ### Update a conflict
 Send the modified values for the attributes inside the *properties* key.
 
-`PATCH /api/v1/conflicts/update/`
+`PATCH /api/v1/conflicts/160/update/`
 Sample Request body:
 ```
 {
     "tags": [
-        {
-            "k": "name",
-            "v": "Bir Aspatal"
-        },
-        {
-            "k": "name:en",
-            "v": "Bir Hospital"
-        }
+        "name": "Bir Aspatal",
+        "name:en": "Vir Aspatal"
     ],
     // nodes in the case of way
     "nodes": [
@@ -249,19 +219,13 @@ Sample Request body:
 ```
 ### Resolve a conflict
 If you intend to set the update as resolved, use the following. The body is same as for updating.
-`PATCH /api/v1/conflicts/resolve/`
+`PATCH /api/v1/conflicts/160/resolve/`
 Sample Request body:
 ```
 {
     "tags": [
-        {
-            "k": "name",
-            "v": "Bir Aspatal"
-        },
-        {
-            "k": "name:en",
-            "v": "Bir Hospital"
-        }
+        "name": "Bir Aspatal",
+        "name:en": "Vir Aspatal"
     ],
     // nodes in the case of way
     "nodes": [
