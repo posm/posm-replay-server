@@ -7,6 +7,7 @@ import psycopg2
 import osm2geojson
 
 from django.db import transaction
+from typing import Dict, NewType
 
 from celery import shared_task
 
@@ -36,11 +37,15 @@ from .utils.common import (
     get_current_aoi_path,
     get_overpass_query,
     filter_elements_from_aoi_handler,
-    get_conflicting_elements,
     replace_new_element_ids,
 
     # Typings
     FilteredElements,
+)
+from .utils.conflicts import (
+    get_conflicting_elements,
+
+    # Typings
     ConflictingElements,
 )
 
@@ -51,6 +56,8 @@ logger = logging.getLogger(__name__)
 OVERPASS_API_URL = 'http://overpass-api.de/api/interpreter'
 
 OSMOSIS_COMMAND_TIMEOUT_SECS = 10
+
+ElementTypeStr = NewType('ElementTypeStr', str)
 
 
 def get_first_changeset_id() -> int:
@@ -188,17 +195,11 @@ def track_elements_from_local_changesets():
     return tracker
 
 
-@set_error_status_on_exception(
-    prev_state=ReplayTool.STATUS_EXTRACTING_LOCAL_AOI,
-    curr_state=ReplayTool.STATUS_DETECTING_CONFLICTS
-)
-def filter_referenced_elements_and_detect_conflicts():
+def track_elements_and_get_aoi_handlers(tracker):
     aoi_path = get_aoi_path()
     local_aoi_path = os.path.join(aoi_path, 'local_aoi.osm')
     current_aoi_path = os.path.join(aoi_path, 'current_aoi.osm')
     original_aoi_path = get_original_aoi_path()
-
-    tracker = track_elements_from_local_changesets()
 
     original_aoi_handler = AOIHandler(tracker, '/tmp/original_referenced.osm')
     original_aoi_handler.apply_file_and_cleanup(original_aoi_path)
@@ -209,9 +210,10 @@ def filter_referenced_elements_and_detect_conflicts():
     upstream_aoi_handler = AOIHandler(tracker, '/tmp/upstream_referenced.osm')
     upstream_aoi_handler.apply_file_and_cleanup(current_aoi_path)
 
-    # Get versions
-    version_handler = get_original_element_versions()
+    return original_aoi_handler, local_aoi_handler, upstream_aoi_handler
 
+
+def save_elements_count_data(local_aoi_handler: AOIHandler, upstream_aoi_handler: AOIHandler):
     # Add total count data to replay_tool
     tool = ReplayTool.objects.get()
     tool.elements_data = {
@@ -228,15 +230,15 @@ def filter_referenced_elements_and_detect_conflicts():
     }
     tool.save()
 
-    upstream_elements: FilteredElements = filter_elements_from_aoi_handler(tracker, upstream_aoi_handler)
 
-    local_elements: FilteredElements = filter_elements_from_aoi_handler(tracker, local_aoi_handler)
-
+def add_added_deleted_and_modified_elements(tracker, local_aoi_handler, upstream_aoi_handler):
     local_added_elements = tracker.get_added_elements(local_aoi_handler)
+    local_modified_elements = tracker.get_modified_elements(local_aoi_handler)
     local_deleted_elements = tracker.get_deleted_elements(local_aoi_handler)
 
-    local_modified_elements = tracker.get_modified_elements(local_aoi_handler)
     upstream_modified_elements = tracker.get_modified_elements(upstream_aoi_handler)
+    # TODO: deleted elements
+    upstream_deleted_elements = tracker.get_deleted_elements(upstream_aoi_handler)
     upstream_modified_elements_map = {
         elemtype: {
             x['id']: x
@@ -252,6 +254,7 @@ def filter_referenced_elements_and_detect_conflicts():
                 local_data=elem,
                 upstream_data=upstream_modified_elements_map[elemtype][elem['id']],
                 local_state=OSMElement.LOCAL_STATE_MODIFIED,
+                status=OSMElement.STATUS_RESOLVED,
             )
 
     for elemtype, elems in local_added_elements.items():
@@ -261,6 +264,7 @@ def filter_referenced_elements_and_detect_conflicts():
                 element_id=elem['id'],
                 local_data=elem,
                 local_state=OSMElement.LOCAL_STATE_ADDED,
+                status=OSMElement.STATUS_RESOLVED,
             )
 
     for elemtype, elems in local_deleted_elements.items():
@@ -269,8 +273,28 @@ def filter_referenced_elements_and_detect_conflicts():
                 type=elemtype[:-1],  # the elemtype is plural: nodes, ways, etc but type is singular
                 element_id=elem['id'],
                 local_data=elem,
-                local_state=OSMElement.LOCAL_STATE_DELETED
+                local_state=OSMElement.LOCAL_STATE_DELETED,
+                status=OSMElement.STATUS_RESOLVED,
             )
+
+
+@set_error_status_on_exception(
+    prev_state=ReplayTool.STATUS_EXTRACTING_LOCAL_AOI,
+    curr_state=ReplayTool.STATUS_DETECTING_CONFLICTS
+)
+def filter_referenced_elements_and_detect_conflicts():
+    tracker = track_elements_from_local_changesets()
+    original_aoi_handler, local_aoi_handler, upstream_aoi_handler = track_elements_and_get_aoi_handlers(tracker)
+
+    # Get versions
+    version_handler = get_original_element_versions()
+
+    save_elements_count_data(local_aoi_handler, upstream_aoi_handler)
+
+    upstream_elements: FilteredElements = filter_elements_from_aoi_handler(tracker, upstream_aoi_handler)
+    local_elements: FilteredElements = filter_elements_from_aoi_handler(tracker, local_aoi_handler)
+
+    add_added_deleted_and_modified_elements(tracker, local_aoi_handler, upstream_aoi_handler)
 
     conflicting_elements: ConflictingElements = get_conflicting_elements(
         local_elements['referenced'],
@@ -280,8 +304,55 @@ def filter_referenced_elements_and_detect_conflicts():
 
     for elemtype, ids in conflicting_elements.items():
         OSMElement.objects.filter(type=elemtype[:-1], element_id__in=ids).\
-            update(is_resolved=False, local_state=OSMElement.LOCAL_STATE_CONFLICTING)
+            update(status=OSMElement.STATUS_UNRESOLVED, local_state=OSMElement.LOCAL_STATE_CONFLICTING)
 
+    # NOW add referring ways and relations
+    for rid, relation in local_aoi_handler.referring_relations.items():
+        OSMElement.objects.create(
+            element_id=rid,
+            type=OSMElement.TYPE_RELATION,
+            local_data=relation,
+            upstream_data=relation,
+            local_state=OSMElement.LOCAL_STATE_REFERRING,
+        )
+
+    for wid, way in local_aoi_handler.referring_ways.items():
+        OSMElement.objects.create(
+            element_id=wid,
+            type=OSMElement.TYPE_WAY,
+            local_data=way,
+            upstream_data=way,
+            local_state=OSMElement.LOCAL_STATE_REFERRING,
+        )
+        for node in way['nodes']:
+            pass
+
+    # TODO: add link between nodes and referring elements(ways and relations)
+    for nid, referring_wayids in local_aoi_handler.nodes_references_by_ways.items():
+        node = OSMElement.objects.get(element_id=nid, type=OSMElement.TYPE_NODE)
+        # NOTE: Just use the first refering way
+        # This is because, the conflict is in fact in the position of node contained by
+        # one of the ways, and it is enough that any of the ways be shown,
+        # at least for now.
+        referring_wayid = referring_wayids[0]  # There should be at least one entry
+        referrer = OSMElement.objects.get(element_id=referring_wayid, type=OSMElement.TYPE_WAY)
+        node.reffered_by = referrer
+        node.save()
+
+    # Do the same for nodes and relations
+    for nid, referring_wayids in local_aoi_handler.nodes_references_by_ways.items():
+        node = OSMElement.objects.get(element_id=nid, type=OSMElement.TYPE_NODE)
+        # If the node already has some refferer(probably way) just ignore this one
+        if node.reffered_by:
+            continue
+        # NOTE: Just use the first refering relation
+        # This is because, the conflict is in fact in the position of node contained by
+        # one of the relations, and it is enough that any of the relations be shown,
+        # at least for now.
+        referring_wayid = referring_wayids[0]  # There should be at least one entry
+        referrer = OSMElement.objects.get(element_id=referring_wayid, type=OSMElement.TYPE_WAY)
+        node.reffered_by = referrer
+        node.save()
     return original_aoi_handler, local_aoi_handler, upstream_aoi_handler
 
 
@@ -299,11 +370,13 @@ def generate_all_geojsons(original_ref_path, local_ref_path, upstream_ref_path):
         for feature in geojson['features']:
             type = feature['properties']['type']
             id = feature['properties']['id']
-            obj = OSMElement.objects.get(element_id=id, type=type)
-            feature['properties'] = {
-                # **{k: v for k, v in obj.local_data.items() if k != 'location'},
-                **feature['properties'],
-            }
+            obj, created = OSMElement.objects.get_or_create(
+                element_id=id, type=type,
+                defaults={
+                    'local_data': feature['properties'],
+                    'upstream_data': feature['properties'],
+                }
+            )
             obj.__setattr__(obj_attr, feature)
             obj.save()
 
@@ -357,7 +430,7 @@ def create_and_push_changeset(comment=None):
         changeset_data['data']['changeset'] = changeset_id
         changeset_writer.add_change(changeset_data)
     print(changeset_writer.get_xml())
-    # TODO: send to OSM
+    # TODO: send to OSM, probably after receiving oauth token
     return changeset_id
 
 

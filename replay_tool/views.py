@@ -68,6 +68,7 @@ class ConflictsViewSet(viewsets.ModelViewSet):
             **data,
             'id': osm_element.element_id
         }
+        osm_element.status = OSMElement.STATUS_PARTIALLY_RESOLVED
         osm_element.save()
         return Response(OSMElementSerializer(osm_element).data)
 
@@ -84,7 +85,7 @@ class ConflictsViewSet(viewsets.ModelViewSet):
             **curr_resolved_data,
             **data
         }
-        osm_element.is_resolved = True
+        osm_element.status = OSMElement.STATUS_RESOLVED
         osm_element.save()
         if OSMElement.get_conflicting_elements().count() == 0:
             replay_tool = ReplayTool.objects.get()

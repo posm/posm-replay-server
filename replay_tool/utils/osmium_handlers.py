@@ -1,6 +1,8 @@
 import osmium
 import os
 
+from typing import Dict, List
+
 from replay_tool.serializers.osm import (
     NodeSerializer,
     WaySerializer,
@@ -39,6 +41,10 @@ class AOIHandler(osmium.SimpleHandler):
         super().__init__()
         self.tracker = tracker
         self.ref_osm_path = ref_osm_path
+        self.nodes_references_by_ways: Dict[int, List[int]]
+        self.nodes_references_by_relations: Dict[int, List[int]]
+        # TODO: may need ways references by relations and
+        # relations references by relations
 
         # osmfile to write referenced/added elements only
         try:
@@ -52,15 +58,31 @@ class AOIHandler(osmium.SimpleHandler):
         self.ways_count = 0
         self.relations_count = 0
 
-        self.nodes: dict = {}
-        self.ways: dict = {}
-        self.relations: dict = {}
+        self.nodes: Dict[int, dict] = {}
+        self.ways: Dict[int, dict] = {}
+        self.relations: Dict[int, dict] = {}
+        self.referring_ways: Dict[int, dict] = {}
+        self.referring_relations: Dict[int, dict] = {}
 
-        self._nodes: dict = {}
-        self._ways: dict = {}
+        self._nodes: Dict[int, object] = {}
+        self._ways: Dict[int, object] = {}
+        self._relations: Dict[int, object] = {}
 
     def apply_file_and_cleanup(self, filename):
         self.apply_file(filename)
+
+        # Add to writer, the referenced nodes and elements because they need to be shown in the ui
+        # The idea is to add the ways and relations which reference nodes that
+        # are referenced in the changesets
+        for nodeid in self.tracker.referenced_elements['nodes']:
+            for wayid in self.nodes_references_by_ways.get(nodeid, []):
+                if wayid not in self.tracker.referenced_elements['ways']:
+                    self.referring_ways[wayid] = WaySerializer(self._ways[wayid]).data
+                    self.writer.add_way(self._ways[wayid])
+            for relid in self.nodes_references_by_relations.get(nodeid, []):
+                if relid not in self.tracker.referenced_elements['relations']:
+                    self.referring_relations[relid] = RelationSerializer(self._relations[relid]).data
+                    self.writer.add_relation(self._relations[relid])
 
         self.writer.close()
 
@@ -78,6 +100,13 @@ class AOIHandler(osmium.SimpleHandler):
     def way(self, w):
         self._ways[w.id] = w
         self.ways_count += 1
+        # Add way to node references
+        for node in w.nodes:
+            self.nodes_references_by_ways[node.ref] = [
+                *self.nodes_references_by_ways.get(node.ref, []),
+                w.id
+            ]
+
         if w.id in self.tracker.referenced_elements['ways'] or w.id in self.tracker.added_elements['ways']:
             self.ways[w.id] = WaySerializer(w).data
             # Write to writer to get osm file which is later converted to geojson
@@ -86,7 +115,15 @@ class AOIHandler(osmium.SimpleHandler):
             self.writer.add_way(w)
 
     def relation(self, r):
+        self._relations[r.id] = r
         self.relations_count += 1
+        # Add relation to node references
+        for member in r.members:
+            if member.type == 'node':
+                self.nodes_references_by_relations[member.ref] = [
+                    *self.nodes_references_by_relations.get(member.ref, []),
+                    r.id
+                ]
         if r.id in self.tracker.referenced_elements['relations'] or r.id in self.tracker.added_elements['relations']:
             self.relations[r.id] = RelationSerializer(r).data
             # Write to writer to get osm file which is later converted to geojson
@@ -173,6 +210,9 @@ class ElementsFilterHandler(osmium.SimpleHandler):
     def __init__(self, elements_tracker):
         super().__init__()
         self.elements_tracker = elements_tracker
+        self.nodes: Dict[int, object] = {}
+        self.ways: Dict[int, object] = {}
+        self.relations: Dict[int, object] = {}
 
     @property
     def added_elements(self):

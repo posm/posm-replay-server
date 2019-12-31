@@ -1,9 +1,5 @@
-from copy import deepcopy
-
 from django.db import models, transaction
 from django.contrib.postgres.fields import JSONField
-
-from copy import deepcopy
 
 from .utils.common import get_osm_elems_diff
 
@@ -117,6 +113,13 @@ class OSMElement(models.Model):
     TYPE_WAY = 'way'
     TYPE_RELATION = 'relation'
 
+    reffered_by = models.ForeignKey(
+        'OSMElement',
+        null=True,
+        related_name='referenced_elements',
+        on_delete=models.SET_NULL,
+    )
+
     CHOICES_TYPE = (
         (TYPE_NODE, 'Node'),
         (TYPE_WAY, 'Way'),
@@ -126,6 +129,7 @@ class OSMElement(models.Model):
     LOCAL_STATE_ADDED = 'added'
     LOCAL_STATE_DELETED = 'deleted'
     LOCAL_STATE_MODIFIED = 'modified'
+    LOCAL_STATE_REFERRING = 'referring'  # For ways/relations which refer to a conflicting node
     LOCAL_STATE_CONFLICTING = 'conflicting'
 
     CHOICES_LOCAL_STATE = (
@@ -134,6 +138,17 @@ class OSMElement(models.Model):
         (LOCAL_STATE_MODIFIED, 'Modified'),
         (LOCAL_STATE_CONFLICTING, 'Conflicting'),
     )
+
+    STATUS_RESOLVED = 'resolved'
+    STATUS_PARTIALLY_RESOLVED = 'partially_resolved'
+    STATUS_UNRESOLVED = 'unresolved'
+
+    CHOICES_STATUS = (
+        (STATUS_RESOLVED, 'Resolved'),
+        (STATUS_PARTIALLY_RESOLVED, 'Partially Resolved'),
+        (STATUS_UNRESOLVED, 'Unresolved'),
+    )
+
     element_id = models.BigIntegerField()
     type = models.CharField(max_length=15, choices=CHOICES_TYPE)
 
@@ -145,23 +160,29 @@ class OSMElement(models.Model):
     upstream_data = JSONField(default=dict)
     upstream_geojson = JSONField(default=dict)
 
+    referenced_element = models.ForeignKey(
+        'OSMElement',
+        null=True,
+        on_delete=models.CASCADE
+    )
+
     resolved_data = JSONField(default=dict, null=True, blank=True)
     is_resolved = models.BooleanField(default=True)
+    status = models.CharField(max_length=25, choices=CHOICES_STATUS)
     local_state = models.CharField(max_length=15, choices=CHOICES_LOCAL_STATE)
 
     class Meta:
         unique_together = ('element_id', 'type')
 
     def __str__(self):
-        status = 'Resolved' if self.is_resolved else 'Conflicting'
-        return f'{self.type.title()} {self.element_id}: {status}'
+        return f'{self.type.title()} {self.element_id}: {self.status}'
 
     @classmethod
     def get_conflicting_elements(cls, type=None):
         typefilter = {} if type is None else {'type': type}
         return cls.objects.filter(
             local_state=cls.LOCAL_STATE_CONFLICTING,
-            is_resolved=False,
+            status=cls.STATUS_UNRESOLVED,
             **typefilter,
         )
 
@@ -170,7 +191,7 @@ class OSMElement(models.Model):
         typefilter = {} if type is None else {'type': type}
         return cls.objects.filter(
             local_state=cls.LOCAL_STATE_CONFLICTING,
-            is_resolved=True,
+            status=cls.STATUS_RESOLVED,
             **typefilter,
         )
 
