@@ -113,13 +113,6 @@ class OSMElement(models.Model):
     TYPE_WAY = 'way'
     TYPE_RELATION = 'relation'
 
-    reffered_by = models.ForeignKey(
-        'OSMElement',
-        null=True,
-        related_name='referenced_elements',
-        on_delete=models.SET_NULL,
-    )
-
     CHOICES_TYPE = (
         (TYPE_NODE, 'Node'),
         (TYPE_WAY, 'Way'),
@@ -151,6 +144,12 @@ class OSMElement(models.Model):
 
     element_id = models.BigIntegerField()
     type = models.CharField(max_length=15, choices=CHOICES_TYPE)
+    reffered_by = models.ForeignKey(
+        'OSMElement',
+        null=True,
+        related_name='referenced_elements',
+        on_delete=models.SET_NULL,
+    )
 
     original_geojson = JSONField(default=dict)
 
@@ -159,12 +158,6 @@ class OSMElement(models.Model):
 
     upstream_data = JSONField(default=dict)
     upstream_geojson = JSONField(default=dict)
-
-    referenced_element = models.ForeignKey(
-        'OSMElement',
-        null=True,
-        on_delete=models.CASCADE
-    )
 
     resolved_data = JSONField(default=dict, null=True, blank=True)
     is_resolved = models.BooleanField(default=True)
@@ -178,30 +171,32 @@ class OSMElement(models.Model):
         return f'{self.type.title()} {self.element_id}: {self.status}'
 
     @classmethod
-    def get_conflicting_elements(cls, type=None):
-        typefilter = {} if type is None else {'type': type}
+    def get_conflicting_elements(cls):
         return cls.objects.filter(
-            local_state=cls.LOCAL_STATE_CONFLICTING,
-            status=cls.STATUS_UNRESOLVED,
-            **typefilter,
+            models.Q(
+                models.Q(upstream_data__tags__isnull=False) | models.Q(reffered_by__isnull=True),
+                local_state=cls.LOCAL_STATE_CONFLICTING,
+                type=cls.TYPE_NODE,
+            ) |
+            models.Q(
+                local_state=cls.LOCAL_STATE_REFERRING,
+                referenced_elements__local_state=cls.LOCAL_STATE_CONFLICTING,
+                referenced_elements__upstream_data__tags__isnull=True,
+            )
         )
 
-    @classmethod
-    def get_resolved_elements(cls, type=None):
-        typefilter = {} if type is None else {'type': type}
-        return cls.objects.filter(
-            local_state=cls.LOCAL_STATE_CONFLICTING,
-            status=cls.STATUS_RESOLVED,
-            **typefilter,
-        )
+    # @classmethod
+    # def get_resolved_elements(cls):
+        # return cls.objects.filter(
+            # local_state=cls.LOCAL_STATE_CONFLICTING,
+            # status=cls.STATUS_RESOLVED,
+        # )
 
-    @classmethod
-    def get_added_elements(cls, type=None):
-        typefilter = {} if type is None else {'type': type}
-        return cls.objects.filter(
-            local_state=cls.LOCAL_STATE_ADDED,
-            **typefilter,
-        )
+    # @classmethod
+    # def get_added_elements(cls):
+        # return cls.objects.filter(
+            # local_state=cls.LOCAL_STATE_ADDED,
+        # )
 
     @classmethod
     @transaction.atomic

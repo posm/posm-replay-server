@@ -41,8 +41,8 @@ class AOIHandler(osmium.SimpleHandler):
         super().__init__()
         self.tracker = tracker
         self.ref_osm_path = ref_osm_path
-        self.nodes_references_by_ways: Dict[int, List[int]]
-        self.nodes_references_by_relations: Dict[int, List[int]]
+        self.nodes_references_by_ways: Dict[int, List[int]] = {}
+        self.nodes_references_by_relations: Dict[int, List[int]] = {}
         # TODO: may need ways references by relations and
         # relations references by relations
 
@@ -53,6 +53,15 @@ class AOIHandler(osmium.SimpleHandler):
             pass
 
         self.writer = osmium.SimpleWriter(ref_osm_path)
+        # We need nodes writer as well because nodes referenced won't be
+        # present in geojson which is extracted later
+        # (the library osm2geojson does not include refrerenced nodes in geojson)
+        nodes_ref_path = ref_osm_path + '.nodes.osm'
+        try:
+            os.remove(nodes_ref_path)
+        except OSError:
+            pass
+        self.nodes_writer = osmium.SimpleWriter(nodes_ref_path)
 
         self.nodes_count = 0
         self.ways_count = 0
@@ -78,13 +87,20 @@ class AOIHandler(osmium.SimpleHandler):
             for wayid in self.nodes_references_by_ways.get(nodeid, []):
                 if wayid not in self.tracker.referenced_elements['ways']:
                     self.referring_ways[wayid] = WaySerializer(self._ways[wayid]).data
+                    for node in self._ways[wayid].nodes:
+                        if node.ref not in self.nodes:
+                            self.writer.add_node(self._nodes[node.ref])
                     self.writer.add_way(self._ways[wayid])
             for relid in self.nodes_references_by_relations.get(nodeid, []):
                 if relid not in self.tracker.referenced_elements['relations']:
                     self.referring_relations[relid] = RelationSerializer(self._relations[relid]).data
+                    for member in self._relations[relid].members:
+                        if member.type == 'node' and member.ref not in self.nodes:
+                            self.writer.add_node(self._nodes[member.ref])
                     self.writer.add_relation(self._relations[relid])
 
         self.writer.close()
+        self.nodes_writer.close()
 
         self._nodes.clear()
         self._ways.clear()
@@ -96,6 +112,8 @@ class AOIHandler(osmium.SimpleHandler):
             self.nodes[n.id] = NodeSerializer(n).data
             # Write to writer to get osm file which is later converted to geojson
             self.writer.add_node(n)
+            # Add it to node writer as well
+            self.nodes_writer.add_node(n)
 
     def way(self, w):
         self._ways[w.id] = w

@@ -7,7 +7,7 @@ import psycopg2
 import osm2geojson
 
 from django.db import transaction
-from typing import Dict, NewType
+from typing import NewType
 
 from celery import shared_task
 
@@ -327,9 +327,20 @@ def filter_referenced_elements_and_detect_conflicts():
         for node in way['nodes']:
             pass
 
-    # TODO: add link between nodes and referring elements(ways and relations)
+    # Get conflicting nodes and create map
+    nodes_map = {
+        node.element_id: node
+        for node in OSMElement.objects.filter(
+            type=OSMElement.TYPE_NODE,
+            local_state=OSMElement.LOCAL_STATE_CONFLICTING,
+        )
+    }
+
+    # Add link between nodes and referring elements(ways and relations)
     for nid, referring_wayids in local_aoi_handler.nodes_references_by_ways.items():
-        node = OSMElement.objects.get(element_id=nid, type=OSMElement.TYPE_NODE)
+        node = nodes_map.get(nid)
+        if not node:
+            continue
         # NOTE: Just use the first refering way
         # This is because, the conflict is in fact in the position of node contained by
         # one of the ways, and it is enough that any of the ways be shown,
@@ -341,9 +352,9 @@ def filter_referenced_elements_and_detect_conflicts():
 
     # Do the same for nodes and relations
     for nid, referring_wayids in local_aoi_handler.nodes_references_by_ways.items():
-        node = OSMElement.objects.get(element_id=nid, type=OSMElement.TYPE_NODE)
+        node = nodes_map.get(nid)
         # If the node already has some refferer(probably way) just ignore this one
-        if node.reffered_by:
+        if not node or node.reffered_by:
             continue
         # NOTE: Just use the first refering relation
         # This is because, the conflict is in fact in the position of node contained by
@@ -365,12 +376,27 @@ def generate_all_geojsons(original_ref_path, local_ref_path, upstream_ref_path):
     local_geojson = generate_geojsons(local_ref_path)
     upstream_geojson = generate_geojsons(upstream_ref_path)
 
+    # Keep track of nodes geojson only, because some nodes are not populated in geojson
+    # whenever the node is referenced by a way or relation
+    original_nodes_geojson = {
+        feature['properties']['id']: feature for feature in
+        generate_geojsons(original_ref_path + '.nodes.osm')['features']
+    }
+    upstream_nodes_geojson = {
+        feature['properties']['id']: feature for feature in
+        generate_geojsons(upstream_ref_path + '.nodes.osm')['features']
+    }
+    local_nodes_geojson = {
+        feature['properties']['id']: feature for feature in
+        generate_geojsons(local_ref_path + '.nodes.osm')['features']
+    }
+
     @transaction.atomic
     def _set_geojson(geojson, obj_attr):
         for feature in geojson['features']:
             type = feature['properties']['type']
             id = feature['properties']['id']
-            obj, created = OSMElement.objects.get_or_create(
+            obj, _ = OSMElement.objects.get_or_create(
                 element_id=id, type=type,
                 defaults={
                     'local_data': feature['properties'],
@@ -383,6 +409,14 @@ def generate_all_geojsons(original_ref_path, local_ref_path, upstream_ref_path):
     _set_geojson(original_geojson, 'original_geojson')
     _set_geojson(local_geojson, 'local_geojson')
     _set_geojson(upstream_geojson, 'upstream_geojson')
+
+    # Set geojsons of nodes which do not have geojsons
+    with transaction.atomic():
+        for obj in OSMElement.objects.filter(type=OSMElement.TYPE_NODE):
+            obj.original_geojson = obj.original_geojson or original_nodes_geojson.get(obj.element_id, {})
+            obj.upstream_geojson = obj.upstream_geojson or upstream_nodes_geojson.get(obj.element_id, {})
+            obj.local_geojson = obj.local_geojson or local_nodes_geojson.get(obj.element_id, {})
+            obj.save()
 
     return True
 
