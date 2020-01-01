@@ -248,11 +248,14 @@ def add_added_deleted_and_modified_elements(tracker, local_aoi_handler, upstream
 
     for elemtype, elems in local_modified_elements.items():
         for elem in elems:
+            upstream_data = upstream_modified_elements_map[elemtype][elem['id']]
+            if not upstream_data.get('tags'):
+                upstream_data.pop('tags', None)
             OSMElement.objects.create(
                 type=elemtype[:-1],  # the elemtype is plural: nodes, ways, etc but type is singular
                 element_id=elem['id'],
                 local_data=elem,
-                upstream_data=upstream_modified_elements_map[elemtype][elem['id']],
+                upstream_data=upstream_data,
                 local_state=OSMElement.LOCAL_STATE_MODIFIED,
                 status=OSMElement.STATUS_RESOLVED,
             )

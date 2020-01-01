@@ -171,32 +171,99 @@ class OSMElement(models.Model):
         return f'{self.type.title()} {self.element_id}: {self.status}'
 
     @classmethod
-    def get_conflicting_elements(cls):
+    def get_all_conflicting_elements(cls):
+        """Returns elements that have been resolved as well"""
         return cls.objects.filter(
             models.Q(
-                models.Q(upstream_data__tags__isnull=False) | models.Q(reffered_by__isnull=True),
+                models.Q(upstream_data__tags__isnull=False),
                 local_state=cls.LOCAL_STATE_CONFLICTING,
                 type=cls.TYPE_NODE,
+            ) |
+            models.Q(
+                ~models.Q(type=cls.TYPE_NODE),
+                local_state=cls.LOCAL_STATE_CONFLICTING,
             ) |
             models.Q(
                 local_state=cls.LOCAL_STATE_REFERRING,
                 referenced_elements__local_state=cls.LOCAL_STATE_CONFLICTING,
                 referenced_elements__upstream_data__tags__isnull=True,
             )
+        ).distinct()
+
+    @classmethod
+    def get_conflicting_elements(cls):
+        return cls.objects.filter(
+            models.Q(
+                models.Q(upstream_data__tags__isnull=False),
+                ~models.Q(status=cls.STATUS_UNRESOLVED),
+                local_state=cls.LOCAL_STATE_CONFLICTING,
+                type=cls.TYPE_NODE,
+            ) |
+            models.Q(
+                ~models.Q(type=cls.TYPE_NODE),
+                ~models.Q(status=cls.STATUS_UNRESOLVED),
+                local_state=cls.LOCAL_STATE_CONFLICTING,
+            ) |
+            models.Q(
+                ~models.Q(referenced_elements__status=cls.STATUS_UNRESOLVED),
+                local_state=cls.LOCAL_STATE_REFERRING,
+                referenced_elements__local_state=cls.LOCAL_STATE_CONFLICTING,
+                referenced_elements__upstream_data__tags__isnull=True,
+            )
+        ).distinct()
+
+    @classmethod
+    def get_partially_resolved_elements(cls):
+        return cls.objects.filter(
+            models.Q(
+                models.Q(upstream_data__tags__isnull=False),
+                ~models.Q(status=cls.STATUS_PARTIALLY_RESOLVED),
+                local_state=cls.LOCAL_STATE_CONFLICTING,
+                type=cls.TYPE_NODE,
+            ) |
+            models.Q(
+                ~models.Q(type=cls.TYPE_NODE),
+                ~models.Q(status=cls.STATUS_PARTIALLY_RESOLVED),
+                local_state=cls.LOCAL_STATE_CONFLICTING,
+            ) |
+            models.Q(
+                ~models.Q(referenced_elements__status=cls.STATUS_PARTIALLY_RESOLVED),
+                local_state=cls.LOCAL_STATE_REFERRING,
+                referenced_elements__local_state=cls.LOCAL_STATE_CONFLICTING,
+                referenced_elements__upstream_data__tags__isnull=True,
+            )
+        ).distinct()
+
+    @classmethod
+    def get_resolved_elements(cls):
+        return cls.objects.filter(
+            models.Q(
+                models.Q(upstream_data__tags__isnull=False),
+                local_state=cls.LOCAL_STATE_CONFLICTING,
+                status=cls.STATUS_RESOLVED,
+                type=cls.TYPE_NODE,
+            ) |
+            models.Q(
+                ~models.Q(type=cls.TYPE_NODE),
+                status=cls.STATUS_RESOLVED,
+                local_state=cls.LOCAL_STATE_CONFLICTING,
+            ) |
+            models.Q(
+                local_state=cls.LOCAL_STATE_REFERRING,
+                # TODO: the following logic might not work for foreign key
+                referenced_elements__local_state=cls.LOCAL_STATE_CONFLICTING,
+                referenced_elements__status=cls.STATUS_RESOLVED,
+                referenced_elements__upstream_data__tags__isnull=True,
+            )
+        ).distinct()
+
+    @classmethod
+    def get_added_elements(cls, type=None):
+        typefilter = {'type': type} if type else {}
+        return cls.objects.filter(
+            local_state=cls.LOCAL_STATE_ADDED,
+            **typefilter,
         )
-
-    # @classmethod
-    # def get_resolved_elements(cls):
-        # return cls.objects.filter(
-            # local_state=cls.LOCAL_STATE_CONFLICTING,
-            # status=cls.STATUS_RESOLVED,
-        # )
-
-    # @classmethod
-    # def get_added_elements(cls):
-        # return cls.objects.filter(
-            # local_state=cls.LOCAL_STATE_ADDED,
-        # )
 
     @classmethod
     @transaction.atomic

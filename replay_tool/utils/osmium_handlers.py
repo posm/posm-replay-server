@@ -137,7 +137,7 @@ class AOIHandler(osmium.SimpleHandler):
         self.relations_count += 1
         # Add relation to node references
         for member in r.members:
-            if member.type == 'node':
+            if member.type == 'n':
                 self.nodes_references_by_relations[member.ref] = [
                     *self.nodes_references_by_relations.get(member.ref, []),
                     r.id
@@ -146,11 +146,11 @@ class AOIHandler(osmium.SimpleHandler):
             self.relations[r.id] = RelationSerializer(r).data
             # Write to writer to get osm file which is later converted to geojson
             for member in r.members:
-                if member.type == 'way':
+                if member.type == 'w':
                     for node in self._ways[member.ref].nodes:
                         self.writer.add_node(self._nodes[node.ref])
                     self.writer.add_way(self._ways[member.ref])
-                elif member.type == 'node':
+                elif member.type == 'n':
                     self.writer.add_node(self._nodes[member.ref])
                 # TODO: member.type == 'relation'
             self.writer.add_relation(r)
