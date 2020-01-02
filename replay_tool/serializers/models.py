@@ -32,31 +32,38 @@ class ReplayToolSerializer(serializers.ModelSerializer):
 
 class OSMElementSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
-    # local_geojson = serializers.SerializerMethodField()
-    # upstream_geojson = serializers.SerializerMethodField()
-    # original_geojson = serializers.SerializerMethodField()
+    local_geojson = serializers.SerializerMethodField()
+    upstream_geojson = serializers.SerializerMethodField()
 
     class Meta:
         model = OSMElement
         exclude = ('local_data', 'upstream_data')
 
     def get_local_geojson(self, obj):
-        if obj.type != OSMElement.TYPE_NODE:
+        if obj.local_state == OSMElement.LOCAL_STATE_REFERRING:
+            local_geojson = dict(obj.local_geojson)
+            local_geojson['properties'] = dict(obj.local_geojson['properties'])
+            # Add referenced nodes
+            local_geojson['properties']['nodes'] = {
+                x.element_id: x.local_data['location']
+                for x in obj.referenced_elements.all()
+            }
+            return local_geojson
+        else:
             return obj.local_geojson
-        elif obj.reffered_by is not None:
-            return obj.reffered_by.local_geojson
-        return {}
 
     def get_upstream_geojson(self, obj):
-        if obj.type != OSMElement.TYPE_NODE:
-            return obj.upstream_geojson
-        elif obj.reffered_by is not None:
-            return obj.reffered_by.upstream_geojson
-        return {}
-
-    def get_original_geojson(self, obj):
-        if obj.type != OSMElement.TYPE_NODE:
-            return obj.original_geojson
+        if obj.local_state == OSMElement.LOCAL_STATE_REFERRING:
+            upstream_geojson = dict(obj.upstream_geojson)
+            upstream_geojson['properties'] = dict(obj.upstream_geojson['properties'])
+            # Add referenced nodes
+            upstream_geojson['properties']['nodes'] = {
+                x.element_id: x.upstream_data['location']
+                for x in obj.referenced_elements.all()
+            }
+            return upstream_geojson
+        else:
+            return obj.local_geojson
 
     def get_name(self, obj):
         tags = {x['k']: x['v'] for x in obj.local_data.get('tags', [])}

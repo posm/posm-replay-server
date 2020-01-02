@@ -1,6 +1,8 @@
 from django.db import models, transaction
 from django.contrib.postgres.fields import JSONField
 
+from copy import deepcopy
+
 from .utils.common import get_osm_elems_diff
 
 from mypy_extensions import TypedDict
@@ -283,6 +285,13 @@ class OSMElement(models.Model):
         """
         change_data: ChangeData = {'type': self.type, 'action': '', 'data': {}}
 
+        resolved_data = deepcopy(self.resolved_data)
+        # Pop referenced nodes/ways/relations present in resolved_data, they should
+        # be resolved at this point
+        resolved_data.pop('nodes', None)
+        resolved_data.pop('ways', None)
+        resolved_data.pop('relations', None)
+
         original_data = self.original_geojson.get('properties', {})
         if self.local_state == self.LOCAL_STATE_ADDED:
             change_data['action'] = 'create'
@@ -303,7 +312,7 @@ class OSMElement(models.Model):
             # Set version to 1 greater than upstream version
             change_data['data']['version'] = self.upstream_data['version'] + 1
         elif self.local_state == self.LOCAL_STATE_CONFLICTING:
-            diff = get_osm_elems_diff(self.resolved_data, original_data)
+            diff = get_osm_elems_diff(resolved_data, original_data)
             action = 'delete' if diff.get('deleted') else 'modify'
             change_data['action'] = action
             change_data['data'] = diff
@@ -317,6 +326,6 @@ class OSMElement(models.Model):
         if self.type == 'node':
             change_data['data'].pop('location', None)
             # Add lat/lon. In db they are inside location dict, for changeset, take them out.
-            change_data['data']['lat'] = self.local_data['location']['lat']
-            change_data['data']['lon'] = self.local_data['location']['lon']
+            change_data['data']['lat'] = resolved_data['location']['lat']
+            change_data['data']['lon'] = resolved_data['location']['lon']
         return change_data

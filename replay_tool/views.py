@@ -70,6 +70,10 @@ class ConflictsViewSet(viewsets.ModelViewSet):
         }
         osm_element.status = OSMElement.STATUS_PARTIALLY_RESOLVED
         osm_element.save()
+
+        # Update the referenced elements
+        update_referenced_elements(osm_element)
+
         return Response(OSMElementSerializer(osm_element).data)
 
     @action(
@@ -88,6 +92,9 @@ class ConflictsViewSet(viewsets.ModelViewSet):
         }
         osm_element.status = OSMElement.STATUS_RESOLVED
         osm_element.save()
+        # Resolve the referenced elements
+        resolve_referenced_elements(osm_element)
+
         if OSMElement.get_conflicting_elements().count() == 0:
             replay_tool = ReplayTool.objects.get()
             replay_tool.state = ReplayTool.STATUS_RESOLVED
@@ -108,6 +115,9 @@ class ConflictsViewSet(viewsets.ModelViewSet):
         osm_element.status = OSMElement.STATUS_RESOLVED
         osm_element.save()
 
+        # Resolve the referenced elements
+        resolve_referenced_elements(osm_element)
+
         if OSMElement.get_conflicting_elements().count() == 0:
             replay_tool = ReplayTool.objects.get()
             replay_tool.state = ReplayTool.STATUS_RESOLVED
@@ -122,3 +132,33 @@ class ConflictsViewSet(viewsets.ModelViewSet):
     def validate_and_process_data(self, data):
         data = self.remove_meta_keys(data)
         return data
+
+
+def update_referenced_elements(osm_element: OSMElement) -> None:
+    if osm_element.type == OSMElement.TYPE_NODE:
+        return
+    nodes = osm_element.resolved_data.get('nodes') or {}
+
+    for nid, location_data in nodes.items():
+        node = OSMElement.objects.get(element_id=nid, type=OSMElement.TYPE_NODE)
+        node.resolved_data['location'] = {
+            'lat': location_data['lat'],
+            'lon': location_data['lon'],
+        }
+        node.status = OSMElement.STATUS_PARTIALLY_RESOLVED
+        node.save()
+
+
+def resolve_referenced_elements(osm_element: OSMElement) -> None:
+    if osm_element.type == OSMElement.TYPE_NODE:
+        return
+    nodes = osm_element.resolved_data.get('nodes') or {}
+
+    for nid, location_data in nodes.items():
+        node = OSMElement.objects.get(element_id=nid, type=OSMElement.TYPE_NODE)
+        node.resolved_data['location'] = {
+            'lat': location_data['lat'],
+            'lon': location_data['lon'],
+        }
+        node.status = OSMElement.STATUS_RESOLVED
+        node.save()
