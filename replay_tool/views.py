@@ -4,7 +4,7 @@ from rest_framework import viewsets, exceptions
 from rest_framework.response import Response
 
 
-from .tasks import task_prepare_data_for_replay_tool
+from .tasks import task_prepare_data_for_replay_tool, create_and_push_changeset
 
 from .models import ReplayTool, OSMElement
 from .serializers.models import (
@@ -44,6 +44,29 @@ def retrigger(request):
 def reset(request):
     ReplayTool.reset()
     return Response({'message': 'Replay Tool has been successfully reset.'})
+
+
+@api_view(['POST'])
+def push_upstream(request):
+    data = request.data
+    oauth_token = data.get('oauth_token')
+    oauth_token_secret = data.get('oauth_token_secret')
+    if not oauth_token:
+        raise exceptions.ValidationError({'oauth_token': 'This field must be present.'})
+    if not oauth_token_secret:
+        raise exceptions.ValidationError({'oauth_token_secret': 'This field must be present.'})
+    # Check for replay tool's status
+    replay_tool = ReplayTool.objects.get()
+    if replay_tool.status != ReplayTool.STATUS_RESOLVED:
+        raise exceptions.ValidationError('All the conflicts have not been resolved')
+
+    # Call the task
+    replay_tool.status = ReplayTool.STATUS_PUSH_CONFLICTS
+    replay_tool.save()
+    create_and_push_changeset.delay(oauth_token, oauth_token_secret)
+    return Response({
+        'message': 'The changes are being pushed upstream'
+    })
 
 
 class ConflictsViewSet(viewsets.ModelViewSet):

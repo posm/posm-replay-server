@@ -431,11 +431,12 @@ def generate_geojsons(osmpath):
     return geojson
 
 
+@shared_task
 @set_error_status_on_exception(
     prev_state=ReplayTool.STATUS_RESOLVED,
     curr_state=ReplayTool.STATUS_PUSHED_UPSTREAM
 )
-def create_and_push_changeset(comment=None):
+def create_and_push_changeset(oauth_token, oauth_token_secret, comment=None):
     aoiname = get_aoi_name()
     comment = comment or f"Updates on POSM in area '{aoiname}'"
     # TODO: get version
