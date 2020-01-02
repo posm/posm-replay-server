@@ -6,7 +6,7 @@ import tempfile
 import psycopg2
 import osm2geojson
 
-from django.db import transaction
+from django.db import transaction, models
 from typing import NewType
 
 from celery import shared_task
@@ -431,10 +431,10 @@ def generate_geojsons(osmpath):
     return geojson
 
 
-# @set_error_status_on_exception(
-    # prev_state=ReplayTool.STATUS_RESOLVED,
-    # curr_state=ReplayTool.STATUS_PUSHED_UPSTREAM
-# )
+@set_error_status_on_exception(
+    prev_state=ReplayTool.STATUS_RESOLVED,
+    curr_state=ReplayTool.STATUS_PUSHED_UPSTREAM
+)
 def create_and_push_changeset(comment=None):
     aoiname = get_aoi_name()
     comment = comment or f"Updates on POSM in area '{aoiname}'"
@@ -454,7 +454,10 @@ def create_and_push_changeset(comment=None):
 
     changeset_id = create_changeset(comment, version)
     changeset_writer = ChangesetsToXMLWriter()
-    for element in OSMElement.objects.all():
+    for element in OSMElement.objects.filter(
+            ~models.Q(local_state=OSMElement.LOCAL_STATE_REFERRING),
+            ~models.Q(status=OSMElement.STATUS_UNRESOLVED),
+    ):
         changeset_data = element.get_osm_change_data()
         # The data does not have locally added elements ids set to negative
         # So replace ids by negative ids if added

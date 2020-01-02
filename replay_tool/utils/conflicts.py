@@ -11,7 +11,7 @@ class ConflictingElements(TypedDict):
 
 
 def pop_irrlevant_osm_attrs(elem: dict):
-    irrelevant_attrs = ['timestamp', 'uid', 'user']
+    irrelevant_attrs = ['timestamp', 'uid', 'user', 'version']
     return {
         k: v
         for k, v in elem.items()
@@ -91,7 +91,6 @@ def get_conflicting_elements(
         k: v for k, v in aoi_referenced_elements['nodes'].items()
         if v['version'] > version_handler.nodes_versions[v['id']]
     }
-
     upstream_changed_ways = {
         k: v for k, v in aoi_referenced_elements['ways'].items()
         if v['version'] > version_handler.ways_versions[v['id']]

@@ -87,19 +87,19 @@ def filter_elements_from_aoi_handler(tracker: OSMElementsTracker, aoi_handler: A
     for nid in tracker.modified_elements['nodes']:
         elements['modified']['nodes'][nid] = aoi_handler.nodes[nid]
 
-    for nid in tracker.deleted_elements['ways']:
-        elements['deleted']['ways'][nid] = aoi_handler.ways[nid]
-    for nid in tracker.referenced_elements['ways']:
-        elements['referenced']['ways'][nid] = aoi_handler.ways[nid]
-    for nid in tracker.modified_elements['ways']:
-        elements['modified']['ways'][nid] = aoi_handler.ways[nid]
+    for wid in tracker.deleted_elements['ways']:
+        elements['deleted']['ways'][wid] = aoi_handler.ways[wid]
+    for wid in tracker.referenced_elements['ways']:
+        elements['referenced']['ways'][wid] = aoi_handler.ways[wid]
+    for wid in tracker.modified_elements['ways']:
+        elements['modified']['ways'][wid] = aoi_handler.ways[wid]
 
-    for nid in tracker.deleted_elements['relations']:
-        elements['deleted']['relations'][nid] = aoi_handler.relations[nid]
-    for nid in tracker.referenced_elements['relations']:
-        elements['referenced']['relations'][nid] = aoi_handler.relations[nid]
-    for nid in tracker.modified_elements['relations']:
-        elements['modified']['relations'][nid] = aoi_handler.relations[nid]
+    for rid in tracker.deleted_elements['relations']:
+        elements['deleted']['relations'][rid] = aoi_handler.relations[rid]
+    for rid in tracker.referenced_elements['relations']:
+        elements['referenced']['relations'][rid] = aoi_handler.relations[rid]
+    for rid in tracker.modified_elements['relations']:
+        elements['modified']['relations'][rid] = aoi_handler.relations[rid]
     return elements
 
 

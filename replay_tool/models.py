@@ -324,8 +324,15 @@ class OSMElement(models.Model):
             raise Exception(f"Invalid value 'f{self.local_state}' for local state")
 
         if self.type == 'node':
-            change_data['data'].pop('location', None)
+            # The location info is either the local location data or location data
+            # in resolved data. The former is the case when it is just modified
+            # and no conflict with upstream. The later is the case when there is conflict
+            location = change_data['data'].pop('location', None)
+            if location:
+                change_data['data']['lat'] = location['lat']
+                change_data['data']['lon'] = location['lon']
             # Add lat/lon. In db they are inside location dict, for changeset, take them out.
-            change_data['data']['lat'] = resolved_data['location']['lat']
-            change_data['data']['lon'] = resolved_data['location']['lon']
+            if resolved_data.get('location'):
+                change_data['data']['lat'] = resolved_data['location']['lat']
+                change_data['data']['lon'] = resolved_data['location']['lon']
         return change_data
