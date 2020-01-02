@@ -195,17 +195,17 @@ class OSMElement(models.Model):
         return cls.objects.filter(
             models.Q(
                 models.Q(upstream_data__tags__isnull=False),
-                ~models.Q(status=cls.STATUS_UNRESOLVED),
+                ~models.Q(status=cls.STATUS_RESOLVED),
                 local_state=cls.LOCAL_STATE_CONFLICTING,
                 type=cls.TYPE_NODE,
             ) |
             models.Q(
                 ~models.Q(type=cls.TYPE_NODE),
-                ~models.Q(status=cls.STATUS_UNRESOLVED),
+                ~models.Q(status=cls.STATUS_RESOLVED),
                 local_state=cls.LOCAL_STATE_CONFLICTING,
             ) |
             models.Q(
-                ~models.Q(referenced_elements__status=cls.STATUS_UNRESOLVED),
+                ~models.Q(referenced_elements__status=cls.STATUS_RESOLVED),
                 local_state=cls.LOCAL_STATE_REFERRING,
                 referenced_elements__local_state=cls.LOCAL_STATE_CONFLICTING,
                 referenced_elements__upstream_data__tags__isnull=True,
@@ -217,17 +217,17 @@ class OSMElement(models.Model):
         return cls.objects.filter(
             models.Q(
                 models.Q(upstream_data__tags__isnull=False),
-                ~models.Q(status=cls.STATUS_PARTIALLY_RESOLVED),
+                status=cls.STATUS_PARTIALLY_RESOLVED,
                 local_state=cls.LOCAL_STATE_CONFLICTING,
                 type=cls.TYPE_NODE,
             ) |
             models.Q(
                 ~models.Q(type=cls.TYPE_NODE),
-                ~models.Q(status=cls.STATUS_PARTIALLY_RESOLVED),
+                status=cls.STATUS_PARTIALLY_RESOLVED,
                 local_state=cls.LOCAL_STATE_CONFLICTING,
             ) |
             models.Q(
-                ~models.Q(referenced_elements__status=cls.STATUS_PARTIALLY_RESOLVED),
+                referenced_elements__status=cls.STATUS_PARTIALLY_RESOLVED,
                 local_state=cls.LOCAL_STATE_REFERRING,
                 referenced_elements__local_state=cls.LOCAL_STATE_CONFLICTING,
                 referenced_elements__upstream_data__tags__isnull=True,

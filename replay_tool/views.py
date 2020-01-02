@@ -83,10 +83,31 @@ class ConflictsViewSet(viewsets.ModelViewSet):
         curr_resolved_data = osm_element.resolved_data or {}
         osm_element.resolved_data = {
             **curr_resolved_data,
-            **data
+            **data,
+            'id': osm_element.element_id
         }
         osm_element.status = OSMElement.STATUS_RESOLVED
         osm_element.save()
+        if OSMElement.get_conflicting_elements().count() == 0:
+            replay_tool = ReplayTool.objects.get()
+            replay_tool.state = ReplayTool.STATUS_RESOLVED
+            replay_tool.save()
+        return Response(OSMElementSerializer(osm_element).data)
+
+    @action(
+        detail=True,
+        methods=['patch'],
+        url_path=r'resolve/(?P<whose>(theirs|ours))',
+    )
+    def resolve_theirs_or_ours(self, request, whose, pk=None):
+        osm_element = self.get_object()
+        if whose == 'theirs':
+            osm_element.resolved_data = osm_element.upstream_data
+        else:
+            osm_element.resolved_data = osm_element.local_data
+        osm_element.status = OSMElement.STATUS_RESOLVED
+        osm_element.save()
+
         if OSMElement.get_conflicting_elements().count() == 0:
             replay_tool = ReplayTool.objects.get()
             replay_tool.state = ReplayTool.STATUS_RESOLVED
