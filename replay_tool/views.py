@@ -14,7 +14,7 @@ from .serializers.models import (
 )
 
 META_KEYS = [
-    'id', 'uid', 'user', 'version', 'location', 'changeset', 'timestamp',
+    'id', 'uid', 'user', 'version', 'changeset', 'timestamp',
 ]
 
 
@@ -70,7 +70,7 @@ def push_upstream(request):
 
 
 class ConflictsViewSet(viewsets.ModelViewSet):
-    queryset = OSMElement.get_conflicting_elements()
+    queryset = OSMElement.get_all_conflicting_elements()
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -84,7 +84,8 @@ class ConflictsViewSet(viewsets.ModelViewSet):
     )
     def update_element(self, request, pk=None):
         osm_element = self.get_object()
-        data = self.validate_and_process_data(request.data)
+        data = self.validate_and_process_data(request.data, osm_element)
+
         curr_resolved_data = osm_element.resolved_data or {}
         osm_element.resolved_data = {
             **curr_resolved_data,
@@ -106,7 +107,8 @@ class ConflictsViewSet(viewsets.ModelViewSet):
     )
     def resolve_element(self, request, pk=None):
         osm_element = self.get_object()
-        data = self.validate_and_process_data(request.data)
+        data = self.validate_and_process_data(request.data, osm_element)
+
         curr_resolved_data = osm_element.resolved_data or {}
         osm_element.resolved_data = {
             **curr_resolved_data,
@@ -159,7 +161,11 @@ class ConflictsViewSet(viewsets.ModelViewSet):
             data.pop(key, None)
         return data
 
-    def validate_and_process_data(self, data):
+    def validate_and_process_data(self, data, osm_element):
+        if osm_element.type == OSMElement.TYPE_NODE:
+            data.pop('conflicting_nodes', None)
+        else:
+            data.pop('location', None)
         data = self.remove_meta_keys(data)
         return data
 
