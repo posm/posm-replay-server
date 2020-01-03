@@ -77,7 +77,7 @@ class MiniOSMElementSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = OSMElement
-        fields = ('id', 'element_id', 'type', 'name')
+        fields = ('id', 'element_id', 'type', 'name', 'status')
 
     def get_name(self, obj):
         tags = {x['k']: x['v'] for x in obj.local_data.get('tags', [])}

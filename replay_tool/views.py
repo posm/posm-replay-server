@@ -57,11 +57,11 @@ def push_upstream(request):
         raise exceptions.ValidationError({'oauth_token_secret': 'This field must be present.'})
     # Check for replay tool's status
     replay_tool = ReplayTool.objects.get()
-    if replay_tool.status != ReplayTool.STATUS_RESOLVED:
+    if replay_tool.state != ReplayTool.STATUS_RESOLVED:
         raise exceptions.ValidationError('All the conflicts have not been resolved')
 
     # Call the task
-    replay_tool.status = ReplayTool.STATUS_PUSH_CONFLICTS
+    replay_tool.state = ReplayTool.STATUS_PUSH_CONFLICTS
     replay_tool.save()
     create_and_push_changeset.delay(oauth_token, oauth_token_secret)
     return Response({
