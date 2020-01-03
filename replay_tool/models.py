@@ -288,9 +288,9 @@ class OSMElement(models.Model):
         resolved_data = deepcopy(self.resolved_data)
         # Pop referenced nodes/ways/relations present in resolved_data, they should
         # be resolved at this point
-        resolved_data.pop('nodes', None)
-        resolved_data.pop('ways', None)
-        resolved_data.pop('relations', None)
+        resolved_data.pop('conflicting_nodes', None)
+        resolved_data.pop('conflicting_ways', None)  # NOTE: this is not present at the moment
+        resolved_data.pop('conflicting_relations', None)  # NOTE: this is not present at the moment
 
         original_data = self.original_geojson.get('properties', {})
         if self.local_state == self.LOCAL_STATE_ADDED:

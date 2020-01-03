@@ -44,7 +44,7 @@ class OSMElementSerializer(serializers.ModelSerializer):
             local_geojson = dict(obj.local_geojson)
             local_geojson['properties'] = dict(obj.local_geojson['properties'])
             # Add referenced nodes
-            local_geojson['properties']['nodes'] = {
+            local_geojson['properties']['conflicting_nodes'] = {
                 x.element_id: x.local_data['location']
                 for x in obj.referenced_elements.all()
             }
@@ -57,7 +57,7 @@ class OSMElementSerializer(serializers.ModelSerializer):
             upstream_geojson = dict(obj.upstream_geojson)
             upstream_geojson['properties'] = dict(obj.upstream_geojson['properties'])
             # Add referenced nodes
-            upstream_geojson['properties']['nodes'] = {
+            upstream_geojson['properties']['conflicting_nodes'] = {
                 x.element_id: x.upstream_data['location']
                 for x in obj.referenced_elements.all()
             }

@@ -160,7 +160,7 @@ class ConflictsViewSet(viewsets.ModelViewSet):
 def update_referenced_elements(osm_element: OSMElement) -> None:
     if osm_element.type == OSMElement.TYPE_NODE:
         return
-    nodes = osm_element.resolved_data.get('nodes') or {}
+    nodes = osm_element.resolved_data.get('conflicting_nodes') or {}
 
     for nid, location_data in nodes.items():
         node = OSMElement.objects.get(element_id=nid, type=OSMElement.TYPE_NODE)
@@ -175,7 +175,7 @@ def update_referenced_elements(osm_element: OSMElement) -> None:
 def resolve_referenced_elements(osm_element: OSMElement) -> None:
     if osm_element.type == OSMElement.TYPE_NODE:
         return
-    nodes = osm_element.resolved_data.get('nodes') or {}
+    nodes = osm_element.resolved_data.get('conflicting_nodes') or {}
 
     for nid, location_data in nodes.items():
         node = OSMElement.objects.get(element_id=nid, type=OSMElement.TYPE_NODE)
