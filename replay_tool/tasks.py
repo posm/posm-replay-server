@@ -327,8 +327,6 @@ def filter_referenced_elements_and_detect_conflicts():
             upstream_data=way,
             local_state=OSMElement.LOCAL_STATE_REFERRING,
         )
-        for node in way['nodes']:
-            pass
 
     # Get conflicting nodes and create map
     nodes_map = {

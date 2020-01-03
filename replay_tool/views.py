@@ -139,7 +139,14 @@ class ConflictsViewSet(viewsets.ModelViewSet):
         osm_element.save()
 
         # Resolve the referenced elements
-        resolve_referenced_elements(osm_element)
+
+        # Note that while completely resolving theirs/ours, resolved data does not
+        # contain the conflicting nodes info, which is looked into by the `resolve_referenced_elements`
+        # function. So manually collect the referenced elements and update them
+        for elem in osm_element.referenced_elements.all():
+            elem.resolved_data = elem.upstream_data if whose == 'theirs' else elem.local_data
+            elem.save()
+        # resolve_referenced_elements(osm_element)
 
         if OSMElement.get_conflicting_elements().count() == 0:
             replay_tool = ReplayTool.objects.get()
