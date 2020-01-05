@@ -68,6 +68,13 @@ def get_original_aoi_path() -> str:
     return os.path.join(aoi_path, original_aoi_name)
 
 
+def create_deleted_element(eid):
+    return {
+        'id': eid,
+        'deleted': True,
+    }
+
+
 def get_overpass_query(s, w, n, e) -> str:
     return f'(node({s},{w},{n},{e});<;>>;>;);out meta;'
 
@@ -81,25 +88,25 @@ def filter_elements_from_aoi_handler(tracker: OSMElementsTracker, aoi_handler: A
         'referring': {'ways': {}, 'relations': {}}
     }
     for nid in tracker.deleted_elements['nodes']:
-        elements['deleted']['nodes'][nid] = aoi_handler.nodes[nid]
+        elements['deleted']['nodes'][nid] = aoi_handler.nodes.get(nid) or create_deleted_element(nid)
     for nid in tracker.referenced_elements['nodes']:
-        elements['referenced']['nodes'][nid] = aoi_handler.nodes[nid]
+        elements['referenced']['nodes'][nid] = aoi_handler.nodes.get(nid) or create_deleted_element(nid)
     for nid in tracker.modified_elements['nodes']:
-        elements['modified']['nodes'][nid] = aoi_handler.nodes[nid]
+        elements['modified']['nodes'][nid] = aoi_handler.nodes.get(nid) or create_deleted_element(nid)
 
     for wid in tracker.deleted_elements['ways']:
-        elements['deleted']['ways'][wid] = aoi_handler.ways[wid]
+        elements['deleted']['ways'][wid] = aoi_handler.ways.get(wid) or create_deleted_element(wid)
     for wid in tracker.referenced_elements['ways']:
-        elements['referenced']['ways'][wid] = aoi_handler.ways[wid]
+        elements['referenced']['ways'][wid] = aoi_handler.ways.get(wid) or create_deleted_element(wid)
     for wid in tracker.modified_elements['ways']:
-        elements['modified']['ways'][wid] = aoi_handler.ways[wid]
+        elements['modified']['ways'][wid] = aoi_handler.ways.get(wid) or create_deleted_element(wid)
 
     for rid in tracker.deleted_elements['relations']:
-        elements['deleted']['relations'][rid] = aoi_handler.relations[rid]
+        elements['deleted']['relations'][rid] = aoi_handler.relations.get(rid) or create_deleted_element(rid)
     for rid in tracker.referenced_elements['relations']:
-        elements['referenced']['relations'][rid] = aoi_handler.relations[rid]
+        elements['referenced']['relations'][rid] = aoi_handler.relations.get(rid) or create_deleted_element(rid)
     for rid in tracker.modified_elements['relations']:
-        elements['modified']['relations'][rid] = aoi_handler.relations[rid]
+        elements['modified']['relations'][rid] = aoi_handler.relations.get(rid) or create_deleted_element(rid)
     return elements
 
 

@@ -23,9 +23,6 @@ def do_elements_conflict(element1_serialized: dict, element2_serialized: dict) -
     """The elements element1 and element2 represent the same element(same id) and are from
     local and upstream db respectively
     """
-    if element1_serialized['visible'] != element2_serialized['visible']:
-        return True
-
     # pop irrelevant keys and attributes
     element1_serialized = pop_irrlevant_osm_attrs(element1_serialized)
     element2_serialized = pop_irrlevant_osm_attrs(element2_serialized)
@@ -67,15 +64,15 @@ def do_elements_conflict(element1_serialized: dict, element2_serialized: dict) -
     return e1_members_keyvals != e2_members_keyvals
 
 
-def filter_conflicting_pairs(local_referenced_elements, aoi_referenced_elements):
+def filter_conflicting_pairs(local_referenced_elements, upstream_referenced_elements):
     """
     Returns [(serialized_local_element1, seriaalized_aoi_element1), ...] of conflicting elements
     """
     conflicting_elements = []
     for l_nid, local_element in local_referenced_elements.items():
-        # NOTE: Assumption that l_nid is always present in aoi_referenced_elements
+        # NOTE: Assumption that l_nid is always present in upstream_referenced_elements
         # which is a very valid assumption
-        aoi_element = aoi_referenced_elements.get(l_nid)
+        aoi_element = upstream_referenced_elements.get(l_nid)
         if not aoi_element:
             continue
         if do_elements_conflict(deepcopy(aoi_element), deepcopy(local_element)):
@@ -84,19 +81,19 @@ def filter_conflicting_pairs(local_referenced_elements, aoi_referenced_elements)
 
 
 def get_conflicting_elements(
-    local_referenced_elements, aoi_referenced_elements, version_handler
+    local_referenced_elements, upstream_referenced_elements, version_handler
 ) -> ConflictingElements:
     # Filter elements that have been changed in upstream, ignore other
     upstream_changed_nodes = {
-        k: v for k, v in aoi_referenced_elements['nodes'].items()
+        k: v for k, v in upstream_referenced_elements['nodes'].items()
         if v['version'] > version_handler.nodes_versions[v['id']]
     }
     upstream_changed_ways = {
-        k: v for k, v in aoi_referenced_elements['ways'].items()
+        k: v for k, v in upstream_referenced_elements['ways'].items()
         if v['version'] > version_handler.ways_versions[v['id']]
     }
     upstream_changed_relations = {
-        k: v for k, v in aoi_referenced_elements['relations'].items()
+        k: v for k, v in upstream_referenced_elements['relations'].items()
         if v['version'] > version_handler.relations_versions[v['id']]
     }
     conflicting_elems: ConflictingElements = {

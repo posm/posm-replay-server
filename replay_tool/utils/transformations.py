@@ -12,7 +12,7 @@ def create_obj_attrs(elem: ET.Element, data: Dict[str, StrOrInt]) -> ET.Element:
             for x in v:
                 se = ET.SubElement(elem, k[:-1])  # k[:-1] : tags -> tag, etc
                 create_obj_attrs(se, x)
-        else:
+        elif v is not None:
             elem.set(k, str(v))
     return elem
 

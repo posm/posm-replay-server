@@ -30,6 +30,13 @@ class VersionHandler(osmium.SimpleHandler):
         self.relations_versions[r.id] = r.version
 
 
+def elem_in_tracker(eid, etype, tracker):
+    return \
+        eid in tracker.referenced_elements[etype] \
+        or eid in tracker.added_elements[etype] \
+        or eid in tracker.deleted_elements[etype]
+
+
 class AOIHandler(osmium.SimpleHandler):
     """
     Stores AOI elements as keys values pair, along with total count
@@ -108,7 +115,7 @@ class AOIHandler(osmium.SimpleHandler):
     def node(self, n):
         self._nodes[n.id] = n
         self.nodes_count += 1
-        if n.id in self.tracker.referenced_elements['nodes'] or n.id in self.tracker.added_elements['nodes']:
+        if elem_in_tracker(n.id, 'nodes', self.tracker):
             self.nodes[n.id] = NodeSerializer(n).data
             # Write to writer to get osm file which is later converted to geojson
             self.writer.add_node(n)
@@ -125,7 +132,7 @@ class AOIHandler(osmium.SimpleHandler):
                 w.id
             ]
 
-        if w.id in self.tracker.referenced_elements['ways'] or w.id in self.tracker.added_elements['ways']:
+        if elem_in_tracker(w.id, 'ways', self.tracker):
             self.ways[w.id] = WaySerializer(w).data
             # Write to writer to get osm file which is later converted to geojson
             for node in w.nodes:
@@ -142,7 +149,7 @@ class AOIHandler(osmium.SimpleHandler):
                     *self.nodes_references_by_relations.get(member.ref, []),
                     r.id
                 ]
-        if r.id in self.tracker.referenced_elements['relations'] or r.id in self.tracker.added_elements['relations']:
+        if elem_in_tracker(r.id, 'relations', self.tracker):
             self.relations[r.id] = RelationSerializer(r).data
             # Write to writer to get osm file which is later converted to geojson
             for member in r.members:
@@ -190,13 +197,13 @@ class OSMElementsTracker:
     def get_deleted_elements(self, aoi_handler):
         return {
             'nodes': [
-                aoi_handler.nodes[k] for k in self.deleted_elements['nodes']
+                {'id': k, 'deleted': True} for k in self.deleted_elements['nodes']
             ],
             'ways': [
-                aoi_handler.ways[k] for k in self.deleted_elements['ways']
+                {'id': k, 'deleted': True} for k in self.deleted_elements['ways']
             ],
             'relations': [
-                aoi_handler.relations[k] for k in self.deleted_elements['relations']
+                {'id': k, 'deleted': True} for k in self.deleted_elements['relations']
             ],
         }
 
@@ -213,6 +220,18 @@ class OSMElementsTracker:
             ],
         }
 
+    def get_referenced_elements(self, aoi_handler):
+        return {
+            'nodes': [
+                aoi_handler.nodes[k] for k in self.referenced_elements['nodes']
+            ],
+            'ways': [
+                aoi_handler.ways[k] for k in self.referenced_elements['ways']
+            ],
+            'relations': [
+                aoi_handler.relations[k] for k in self.referenced_elements['relations']
+            ],
+        }
 
 class ElementsFilterHandler(osmium.SimpleHandler):
     """

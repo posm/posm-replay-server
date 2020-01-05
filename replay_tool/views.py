@@ -86,9 +86,7 @@ class ConflictsViewSet(viewsets.ModelViewSet):
         osm_element = self.get_object()
         data = self.validate_and_process_data(request.data, osm_element)
 
-        curr_resolved_data = osm_element.resolved_data or {}
         osm_element.resolved_data = {
-            **curr_resolved_data,
             **data,
             'id': osm_element.element_id
         }
@@ -109,9 +107,7 @@ class ConflictsViewSet(viewsets.ModelViewSet):
         osm_element = self.get_object()
         data = self.validate_and_process_data(request.data, osm_element)
 
-        curr_resolved_data = osm_element.resolved_data or {}
         osm_element.resolved_data = {
-            **curr_resolved_data,
             **data,
             'id': osm_element.element_id
         }

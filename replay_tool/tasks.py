@@ -239,7 +239,7 @@ def add_added_deleted_and_modified_elements(tracker, local_aoi_handler, upstream
     upstream_modified_elements = tracker.get_modified_elements(upstream_aoi_handler)
     # TODO: deleted elements
     upstream_deleted_elements = tracker.get_deleted_elements(upstream_aoi_handler)
-    upstream_modified_elements_map = {
+    upstream_referenced_elements_map = {
         elemtype: {
             x['id']: x
             for x in elems
@@ -248,7 +248,7 @@ def add_added_deleted_and_modified_elements(tracker, local_aoi_handler, upstream
 
     for elemtype, elems in local_modified_elements.items():
         for elem in elems:
-            upstream_data = upstream_modified_elements_map[elemtype][elem['id']]
+            upstream_data = upstream_referenced_elements_map[elemtype][elem['id']]
             if not upstream_data.get('tags'):
                 upstream_data.pop('tags', None)
             OSMElement.objects.create(
@@ -272,13 +272,23 @@ def add_added_deleted_and_modified_elements(tracker, local_aoi_handler, upstream
 
     for elemtype, elems in local_deleted_elements.items():
         for elem in elems:
+            upstream_data = upstream_referenced_elements_map[elemtype].get(elem['id']) or {}
             OSMElement.objects.create(
                 type=elemtype[:-1],  # the elemtype is plural: nodes, ways, etc but type is singular
                 element_id=elem['id'],
                 local_data=elem,
+                upstream_data=upstream_data,
                 local_state=OSMElement.LOCAL_STATE_DELETED,
                 status=OSMElement.STATUS_RESOLVED,
             )
+
+
+def get_referenced_and_deleted_elements(elements: FilteredElements) -> dict:
+    return {
+        'nodes': {**elements['referenced']['nodes'], **elements['deleted']['nodes']},
+        'ways': {**elements['referenced']['ways'], **elements['deleted']['ways']},
+        'relations': {**elements['referenced']['relations'], **elements['deleted']['relations']},
+    }
 
 
 @set_error_status_on_exception(
@@ -300,8 +310,8 @@ def filter_referenced_elements_and_detect_conflicts():
     add_added_deleted_and_modified_elements(tracker, local_aoi_handler, upstream_aoi_handler)
 
     conflicting_elements: ConflictingElements = get_conflicting_elements(
-        local_elements['referenced'],
-        upstream_elements['referenced'],
+        get_referenced_and_deleted_elements(local_elements),
+        get_referenced_and_deleted_elements(upstream_elements),
         version_handler,
     )
 
@@ -317,6 +327,7 @@ def filter_referenced_elements_and_detect_conflicts():
             local_data=relation,
             upstream_data=relation,
             local_state=OSMElement.LOCAL_STATE_REFERRING,
+            status=OSMElement.STATUS_UNRESOLVED,
         )
 
     for wid, way in local_aoi_handler.referring_ways.items():
@@ -326,6 +337,7 @@ def filter_referenced_elements_and_detect_conflicts():
             local_data=way,
             upstream_data=way,
             local_state=OSMElement.LOCAL_STATE_REFERRING,
+            status=OSMElement.STATUS_UNRESOLVED,
         )
 
     # Get conflicting nodes and create map

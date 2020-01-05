@@ -22,7 +22,7 @@ class ReplayToolSerializer(serializers.ModelSerializer):
             'bounds': aoi_info['bbox'],
             'description': aoi_info['description'],
             'date_cloned': get_aoi_created_datetime(),
-            'total_conflicting_elements': OSMElement.get_conflicting_elements().count(),
+            'total_conflicting_elements': OSMElement.get_all_conflicting_elements().count(),
             'total_resolved_elements': OSMElement.get_resolved_elements().count(),
             'local_changesets_count': LocalChangeSet.objects.count(),
             'local_elements_count': obj.elements_data.get('local'),
@@ -50,7 +50,7 @@ class OSMElementSerializer(serializers.ModelSerializer):
             }
             return local_geojson
         else:
-            if obj.local_data.get('location'):
+            if obj.local_data.get('location') and local_geojson.get('properties'):
                 local_geojson['properties']['location'] = obj.local_data['location']
             return local_geojson
 
@@ -65,7 +65,7 @@ class OSMElementSerializer(serializers.ModelSerializer):
             }
             return upstream_geojson
         else:
-            if obj.upstream_data.get('location'):
+            if obj.upstream_data.get('location') and upstream_geojson.get('properties'):
                 upstream_geojson['properties']['location'] = obj.upstream_data['location']
             return upstream_geojson
 
