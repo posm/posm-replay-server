@@ -3,6 +3,8 @@ from rest_framework.views import APIView
 from rest_framework import viewsets, exceptions
 from rest_framework.response import Response
 
+from django.db import transaction
+
 
 from .tasks import task_prepare_data_for_replay_tool, create_and_push_changeset
 
@@ -87,7 +89,24 @@ class ConflictsViewSet(viewsets.ModelViewSet):
         self.page = self.paginate_queryset(queryset)
         serializer = self.get_serializer(self.page, many=True)
         return self.get_paginated_response(serializer.data)
-        # return Response(OSMElementSerializer(elements, many=True).data)
+
+    @action(
+        detail=True,
+        methods=['put'],
+        url_path='reset',
+    )
+    def reset_element(self, request, pk=None):
+        osm_element = self.get_object()
+
+        osm_element.resolved_data = {}
+        osm_element.status = OSMElement.STATUS_UNRESOLVED
+        osm_element.resolved_from = None
+        osm_element.save()
+
+        # Update the referenced elements
+        reset_referenced_elements(osm_element)
+
+        return Response(OSMElementSerializer(osm_element).data)
 
     @action(
         detail=True,
@@ -181,6 +200,20 @@ class ConflictsViewSet(viewsets.ModelViewSet):
         return data
 
 
+@transaction.atomic
+def reset_referenced_elements(osm_element: OSMElement) -> None:
+    if osm_element.type == OSMElement.TYPE_NODE:
+        return
+    nodes = osm_element.resolved_data.get('conflicting_nodes') or {}
+
+    for nid, location_data in nodes.items():
+        node = OSMElement.objects.get(element_id=nid, type=OSMElement.TYPE_NODE)
+        node.resolved_data = {}
+        node.status = OSMElement.STATUS_UNRESOLVED
+        node.resolved_from = None
+        node.save()
+
+
 def update_referenced_elements(osm_element: OSMElement) -> None:
     if osm_element.type == OSMElement.TYPE_NODE:
         return
@@ -208,4 +241,5 @@ def resolve_referenced_elements(osm_element: OSMElement) -> None:
             'lon': location_data['lon'],
         }
         node.status = OSMElement.STATUS_RESOLVED
+        node.resolved_from = OSMElement.RESOLVED_FROM_CUSTOM
         node.save()

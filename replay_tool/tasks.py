@@ -129,7 +129,6 @@ def get_original_element_versions():
     curr_state=ReplayTool.STATUS_EXTRACTING_LOCAL_AOI
 )
 def get_local_aoi_extract():
-    return True
     db_user = os.environ.get('POSM_DB_USER')
     db_password = os.environ.get('POSM_DB_PASSWORD')
     osmosis_aoi_root = os.environ.get('OSMOSIS_AOI_ROOT')
@@ -170,7 +169,6 @@ def get_local_aoi_extract():
     curr_state=ReplayTool.STATUS_EXTRACTING_UPSTREAM_AOI
 )
 def get_current_aoi_extract():
-    return True
     [w, s, e, n] = get_current_aoi_info()['bbox']
     overpass_query = get_overpass_query(s, w, n, e)
     response = requests.get(OVERPASS_API_URL, data={'data': overpass_query})
@@ -466,10 +464,12 @@ def create_and_push_changeset(oauth_token, oauth_token_secret, comment=None):
 
     changeset_id = create_changeset(comment, version)
     changeset_writer = ChangesetsToXMLWriter()
-    for element in OSMElement.objects.filter(
-            ~models.Q(local_state=OSMElement.LOCAL_STATE_REFERRING),
-            ~models.Q(status=OSMElement.STATUS_UNRESOLVED),
-    ):
+
+    to_send_elements = OSMElement.objects.filter(
+        ~models.Q(local_state=OSMElement.LOCAL_STATE_REFERRING),
+        ~models.Q(status=OSMElement.STATUS_UNRESOLVED),
+    )
+    for element in to_send_elements:
         changeset_data = element.get_osm_change_data()
         # The data does not have locally added elements ids set to negative
         # So replace ids by negative ids if added
