@@ -12,3 +12,9 @@ ORIGINAL_AOI_NAME=jawalakhel.pbf
 # For osmosis, because it is run outside docker
 OSMOSIS_DB_HOST=posm.io
 OSMOSIS_AOI_ROOT=/opt/data/aoi
+
+# OAUTH keys
+OAUTH_CONSUMER_KEY=rbkTQrZckoennteqQYUFLrFrSuebNjS5Xq4UgLe3
+OAUTH_CONSUMER_SECRET=JBgkTQrZckoennteqQYUFLrFrSuebNjS5XqLWlMx
+OAUTH_SERVER_URL=https://master.apis.dev.openstreetmap.org
+OAUTH_API_URL=https://master.apis.dev.openstreetmap.org
