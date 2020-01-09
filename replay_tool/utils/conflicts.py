@@ -86,15 +86,15 @@ def get_conflicting_elements(
     # Filter elements that have been changed in upstream, ignore other
     upstream_changed_nodes = {
         k: v for k, v in upstream_referenced_elements['nodes'].items()
-        if v['version'] > version_handler.nodes_versions[v['id']]
+        if not v.get('version') or v['version'] > version_handler.nodes_versions[v['id']]
     }
     upstream_changed_ways = {
         k: v for k, v in upstream_referenced_elements['ways'].items()
-        if v['version'] > version_handler.ways_versions[v['id']]
+        if not v.get('version') or v['version'] > version_handler.ways_versions[v['id']]
     }
     upstream_changed_relations = {
         k: v for k, v in upstream_referenced_elements['relations'].items()
-        if v['version'] > version_handler.relations_versions[v['id']]
+        if not v.get('version') or v['version'] > version_handler.relations_versions[v['id']]
     }
     conflicting_elems: ConflictingElements = {
         'nodes': filter_conflicting_pairs(
@@ -110,4 +110,5 @@ def get_conflicting_elements(
             upstream_changed_relations,
         ),
     }
+    print(conflicting_elems['nodes'])
     return conflicting_elems

@@ -144,6 +144,16 @@ class OSMElement(models.Model):
         (STATUS_UNRESOLVED, 'Unresolved'),
     )
 
+    RESOLVED_FROM_THEIRS = 'theirs'
+    RESOLVED_FROM_OURS = 'ours'
+    RESOLVED_FROM_CUSTOM = 'custom'
+
+    CHOICES_RESOLVED_FROM = (
+        (RESOLVED_FROM_THEIRS, 'Theirs'),
+        (RESOLVED_FROM_OURS, 'Ours'),
+        (RESOLVED_FROM_CUSTOM, 'Custom'),
+    )
+
     element_id = models.BigIntegerField()
     type = models.CharField(max_length=15, choices=CHOICES_TYPE)
     reffered_by = models.ForeignKey(
@@ -162,6 +172,7 @@ class OSMElement(models.Model):
     upstream_geojson = JSONField(default=dict)
 
     resolved_data = JSONField(default=dict, null=True, blank=True)
+    resolved_from = models.CharField(max_length=25, null=True, blank=True, choices=CHOICES_RESOLVED_FROM)
     is_resolved = models.BooleanField(default=True)
     status = models.CharField(max_length=25, choices=CHOICES_STATUS)
     local_state = models.CharField(max_length=15, choices=CHOICES_LOCAL_STATE)
@@ -173,11 +184,28 @@ class OSMElement(models.Model):
         return f'{self.type.title()} {self.element_id}: {self.status}'
 
     @classmethod
+    def get_all_local_elements(cls):
+        """Returns all local elements that might even not have conflicted"""
+        return cls.objects.filter(
+            models.Q(
+                models.Q(local_data__tags__isnull=False),
+                type=cls.TYPE_NODE,
+            ) |
+            models.Q(
+                ~models.Q(type=cls.TYPE_NODE),
+            ) |
+            models.Q(
+                local_state=cls.LOCAL_STATE_REFERRING,
+                referenced_elements__local_data__tags__isnull=True,
+            )
+        ).distinct()
+
+    @classmethod
     def get_all_conflicting_elements(cls):
         """Returns elements that have been resolved as well"""
         return cls.objects.filter(
             models.Q(
-                models.Q(upstream_data__tags__isnull=False),
+                models.Q(upstream_data__tags__isnull=False) | models.Q(local_data__tags__isnull=False),
                 local_state=cls.LOCAL_STATE_CONFLICTING,
                 type=cls.TYPE_NODE,
             ) |
@@ -189,6 +217,7 @@ class OSMElement(models.Model):
                 local_state=cls.LOCAL_STATE_REFERRING,
                 referenced_elements__local_state=cls.LOCAL_STATE_CONFLICTING,
                 referenced_elements__upstream_data__tags__isnull=True,
+                referenced_elements__local_data__tags__isnull=True,
             )
         ).distinct()
 
@@ -196,7 +225,7 @@ class OSMElement(models.Model):
     def get_conflicting_elements(cls):
         return cls.objects.filter(
             models.Q(
-                models.Q(upstream_data__tags__isnull=False),
+                models.Q(upstream_data__tags__isnull=False) | models.Q(local_data__tags__isnull=False),
                 ~models.Q(status=cls.STATUS_RESOLVED),
                 local_state=cls.LOCAL_STATE_CONFLICTING,
                 type=cls.TYPE_NODE,
@@ -211,6 +240,7 @@ class OSMElement(models.Model):
                 local_state=cls.LOCAL_STATE_REFERRING,
                 referenced_elements__local_state=cls.LOCAL_STATE_CONFLICTING,
                 referenced_elements__upstream_data__tags__isnull=True,
+                referenced_elements__local_data__tags__isnull=True,
             )
         ).distinct()
 

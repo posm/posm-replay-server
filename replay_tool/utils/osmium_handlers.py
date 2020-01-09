@@ -223,15 +223,25 @@ class OSMElementsTracker:
     def get_referenced_elements(self, aoi_handler):
         return {
             'nodes': [
-                aoi_handler.nodes[k] for k in self.referenced_elements['nodes']
+                aoi_handler.nodes.get(
+                    k,
+                    {'id': k, 'deleted': True}
+                ) for k in self.referenced_elements['nodes']
             ],
             'ways': [
-                aoi_handler.ways[k] for k in self.referenced_elements['ways']
+                aoi_handler.ways.get(
+                    k,
+                    {'id': k, 'deleted': True}
+                ) for k in self.referenced_elements['ways']
             ],
             'relations': [
-                aoi_handler.relations[k] for k in self.referenced_elements['relations']
+                aoi_handler.relations.get(
+                    k,
+                    {'id': k, 'deleted': True}
+                ) for k in self.referenced_elements['relations']
             ],
         }
+
 
 class ElementsFilterHandler(osmium.SimpleHandler):
     """

@@ -236,14 +236,15 @@ def add_added_deleted_and_modified_elements(tracker, local_aoi_handler, upstream
     local_modified_elements = tracker.get_modified_elements(local_aoi_handler)
     local_deleted_elements = tracker.get_deleted_elements(local_aoi_handler)
 
-    upstream_modified_elements = tracker.get_modified_elements(upstream_aoi_handler)
+    upstream_referenced_elements = tracker.get_referenced_elements(upstream_aoi_handler)
+
     # TODO: deleted elements
     upstream_deleted_elements = tracker.get_deleted_elements(upstream_aoi_handler)
     upstream_referenced_elements_map = {
         elemtype: {
             x['id']: x
             for x in elems
-        } for elemtype, elems in upstream_modified_elements.items()
+        } for elemtype, elems in upstream_referenced_elements.items()
     }
 
     for elemtype, elems in local_modified_elements.items():

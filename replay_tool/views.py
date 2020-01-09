@@ -78,6 +78,18 @@ class ConflictsViewSet(viewsets.ModelViewSet):
         return OSMElementSerializer
 
     @action(
+        detail=False,
+        methods=['get'],
+        url_path=r'all',
+    )
+    def all_elements(self, request):
+        queryset = OSMElement.get_all_local_elements()
+        self.page = self.paginate_queryset(queryset)
+        serializer = self.get_serializer(self.page, many=True)
+        return self.get_paginated_response(serializer.data)
+        # return Response(OSMElementSerializer(elements, many=True).data)
+
+    @action(
         detail=True,
         methods=['patch'],
         url_path=r'update',
@@ -112,6 +124,7 @@ class ConflictsViewSet(viewsets.ModelViewSet):
             'id': osm_element.element_id
         }
         osm_element.status = OSMElement.STATUS_RESOLVED
+        osm_element.resolved_from = OSMElement.RESOLVED_FROM_CUSTOM
         osm_element.save()
         # Resolve the referenced elements
         resolve_referenced_elements(osm_element)
@@ -124,7 +137,7 @@ class ConflictsViewSet(viewsets.ModelViewSet):
 
     @action(
         detail=True,
-        methods=['patch'],
+        methods=['put'],
         url_path=r'resolve/(?P<whose>(theirs|ours))',
     )
     def resolve_theirs_or_ours(self, request, whose, pk=None):
@@ -134,6 +147,7 @@ class ConflictsViewSet(viewsets.ModelViewSet):
         else:
             osm_element.resolved_data = osm_element.local_data
         osm_element.status = OSMElement.STATUS_RESOLVED
+        osm_element.resolved_from = whose
         osm_element.save()
 
         # Resolve the referenced elements
@@ -143,6 +157,7 @@ class ConflictsViewSet(viewsets.ModelViewSet):
         # function. So manually collect the referenced elements and update them
         for elem in osm_element.referenced_elements.all():
             elem.resolved_data = elem.upstream_data if whose == 'theirs' else elem.local_data
+            elem.resolved_from = whose
             elem.save()
         # resolve_referenced_elements(osm_element)
 
