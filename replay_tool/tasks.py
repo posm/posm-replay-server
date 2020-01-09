@@ -441,6 +441,7 @@ def generate_geojsons(osmpath):
 
 
 @shared_task
+# NOTE: not used
 @set_error_status_on_exception(
     prev_state=ReplayTool.STATUS_RESOLVED,
     curr_state=ReplayTool.STATUS_PUSHED_UPSTREAM

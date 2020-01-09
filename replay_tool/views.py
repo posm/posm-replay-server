@@ -5,6 +5,9 @@ from rest_framework.response import Response
 
 from django.db import transaction
 
+from django.views.generic.base import TemplateView
+from social_django.utils import psa
+
 
 from .tasks import task_prepare_data_for_replay_tool, create_and_push_changeset
 
@@ -48,27 +51,33 @@ def reset(request):
     return Response({'message': 'Replay Tool has been successfully reset.'})
 
 
-@api_view(['POST'])
+# @api_view(['POST'])
+# @psa('social:complete')
 def push_upstream(request):
-    data = request.data
-    oauth_token = data.get('oauth_token')
-    oauth_token_secret = data.get('oauth_token_secret')
-    if not oauth_token:
-        raise exceptions.ValidationError({'oauth_token': 'This field must be present.'})
-    if not oauth_token_secret:
-        raise exceptions.ValidationError({'oauth_token_secret': 'This field must be present.'})
-    # Check for replay tool's status
-    replay_tool = ReplayTool.objects.get()
-    if replay_tool.state != ReplayTool.STATUS_RESOLVED:
-        raise exceptions.ValidationError('All the conflicts have not been resolved')
+    token = request.GET.get('access_token')
+    url = 'https://master.apis.dev.openstreetmap.org/api/0.6/changeset/create'
+    response = request.backend.oauth_request(request.backend, token, url, method='PUT')
+    print(response.status_code, response.text)
 
-    # Call the task
-    replay_tool.state = ReplayTool.STATUS_PUSH_CONFLICTS
-    replay_tool.save()
-    create_and_push_changeset.delay(oauth_token, oauth_token_secret)
-    return Response({
-        'message': 'The changes are being pushed upstream'
-    })
+    # data = request.data
+    # oauth_token = data.get('oauth_token')
+    # oauth_token_secret = data.get('oauth_token_secret')
+    # if not oauth_token:
+        # raise exceptions.ValidationError({'oauth_token': 'This field must be present.'})
+    # if not oauth_token_secret:
+        # raise exceptions.ValidationError({'oauth_token_secret': 'This field must be present.'})
+    # # Check for replay tool's status
+    # replay_tool = ReplayTool.objects.get()
+    # if replay_tool.state != ReplayTool.STATUS_RESOLVED:
+        # raise exceptions.ValidationError('All the conflicts have not been resolved')
+
+    # # Call the task
+    # replay_tool.state = ReplayTool.STATUS_PUSH_CONFLICTS
+    # replay_tool.save()
+    # create_and_push_changeset.delay(oauth_token, oauth_token_secret)
+    # return Response({
+        # 'message': 'The changes are being pushed upstream'
+    # })
 
 
 class ConflictsViewSet(viewsets.ModelViewSet):
@@ -243,3 +252,10 @@ def resolve_referenced_elements(osm_element: OSMElement) -> None:
         node.status = OSMElement.STATUS_RESOLVED
         node.resolved_from = OSMElement.RESOLVED_FROM_CUSTOM
         node.save()
+
+
+class LoginPageView(TemplateView):
+    template_name = "login.html"
+
+    def get_context_data(self, **kwargs):
+        return super().get_context_data(**kwargs)

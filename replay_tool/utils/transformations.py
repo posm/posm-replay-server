@@ -6,11 +6,18 @@ from typing import Dict, Union
 StrOrInt = Union[str, int]
 
 
+CHANGESET_TAGNAME_MAP = {
+    'node': 'nd',
+    'tag': 'tag',
+}
+
+
 def create_obj_attrs(elem: ET.Element, data: Dict[str, StrOrInt]) -> ET.Element:
     for k, v in data.items():
         if isinstance(v, list):
+            # grp = ET.SubElement(
             for x in v:
-                se = ET.SubElement(elem, k[:-1])  # k[:-1] : tags -> tag, etc
+                se = ET.SubElement(elem, CHANGESET_TAGNAME_MAP.get(k[:-1], k[:-1]))  # k[:-1] : tags -> tag, nodes -> node -> nd etc
                 create_obj_attrs(se, x)
         elif v is not None:
             elem.set(k, str(v))

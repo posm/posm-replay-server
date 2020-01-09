@@ -176,10 +176,13 @@ def replace_new_relation_data(
     # Change relations and ways ids if new
     for member in data.get('members', []):
         if member['type'] == 'n':
+            member['type'] = 'node'
             member['ref'] = new_nodes_ids_map.get(member['ref'], member['ref'])
         elif member['type'] == 'w':
+            member['type'] = 'way'
             member['ref'] = new_ways_ids_map.get(member['ref'], member['ref'])
         elif member['type'] == 'r':
+            member['type'] = 'relation'
             member['ref'] = new_relations_ids_map.get(member['ref'], member['ref'])
         else:
             raise Exception(f'Invalid member type "{member["type"]}".')

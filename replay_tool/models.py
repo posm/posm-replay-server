@@ -3,7 +3,8 @@ from django.contrib.postgres.fields import JSONField
 
 from copy import deepcopy
 
-from .utils.common import get_osm_elems_diff
+from .utils.common import get_osm_elems_diff, replace_new_element_ids
+from .utils.transformations import ChangesetsToXMLWriter
 
 from mypy_extensions import TypedDict
 
@@ -108,6 +109,14 @@ class LocalChangeSet(models.Model):
 
     def __str__(self):
         return f'Local Changeset # {self.changeset_id}'
+
+
+class UpstreamChangeSet(models.Model):
+    changeset_id = models.BigIntegerField(unique=True)
+    is_closed = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f'{self.changeset_id} {"closed" if self.is_closed else "open"}'
 
 
 class OSMElement(models.Model):
@@ -325,12 +334,12 @@ class OSMElement(models.Model):
         original_data = self.original_geojson.get('properties', {})
         if self.local_state == self.LOCAL_STATE_ADDED:
             change_data['action'] = 'create'
-            change_data['data'] = {k: v for k, v in self.local_data.items() if k != 'location'}
+            change_data['data'] = {k: v for k, v in self.local_data.items()}
             # Set version to 1
             change_data['data']['version'] = 1
         elif self.local_state == self.LOCAL_STATE_DELETED:
             change_data['action'] = 'delete'
-            change_data['data'] = {k: v for k, v in self.local_data.items() if k != 'location'}
+            change_data['data'] = {k: v for k, v in self.local_data.items()}
             change_data['data']['id'] = self.element_id  # Just in case id is not present
             # Set version to 1 greater than upstream version
             change_data['data']['version'] = self.upstream_data['version'] + 1
@@ -353,6 +362,9 @@ class OSMElement(models.Model):
         else:
             raise Exception(f"Invalid value 'f{self.local_state}' for local state")
 
+        if self.type == 'way':
+            print(change_data)
+
         if self.type == 'node':
             # The location info is either the local location data or location data
             # in resolved data. The former is the case when it is just modified
@@ -366,3 +378,48 @@ class OSMElement(models.Model):
                 change_data['data']['lat'] = resolved_data['location']['lat']
                 change_data['data']['lon'] = resolved_data['location']['lon']
         return change_data
+
+    @classmethod
+    def get_upstream_changeset(cls, changeset_id):
+        changeset_writer = ChangesetsToXMLWriter()
+        # Get added elements
+        added_nodes = cls.get_added_elements('node')
+        added_ways = cls.get_added_elements('way')
+        added_relations = cls.get_added_elements('relation')
+
+        # Map ids, map of locally created elements ids and ids to be sent to upstream(negative values)
+        # The mapped ids will be used wherever the elements are referenced
+        new_nodes_ids_map = {x.element_id: -(i + 1) for i, x in enumerate(added_nodes)}
+        new_ways_ids_map = {x.element_id: -(i + 1) for i, x in enumerate(added_ways)}
+        new_relations_ids_map = {x.element_id: -(i + 1) for i, x in enumerate(added_relations)}
+
+        def _write_change(element):
+            changeset_data = element.get_osm_change_data()
+            # The data does not have locally added elements ids set to negative
+            # So replace ids by negative ids if added
+            changeset_data = replace_new_element_ids(
+                changeset_data,
+                new_nodes_ids_map,
+                new_ways_ids_map,
+                new_relations_ids_map,
+            )
+            changeset_data['data']['changeset'] = changeset_id
+            changeset_writer.add_change(changeset_data)
+
+        to_send_elements = cls.objects.filter(
+            ~models.Q(local_state=OSMElement.LOCAL_STATE_REFERRING),
+            ~models.Q(status=OSMElement.STATUS_UNRESOLVED),
+        )
+        # First add nodes
+        for element in to_send_elements.filter(type=cls.TYPE_NODE):
+            _write_change(element)
+
+        # Add ways
+        for element in to_send_elements.filter(type=cls.TYPE_WAY):
+            _write_change(element)
+
+        # Add Relation
+        for element in to_send_elements.filter(type=cls.TYPE_RELATION):
+            _write_change(element)
+
+        return changeset_writer.get_xml()
