@@ -1,28 +1,47 @@
-SERVER_PORT=6007
-
 # USE posm's ip and port 81 as OSM_BASE_URL
 OSM_BASE_URL=http://192.168.31.127:81
+# USE posm's ip
 POSM_DB_HOST=192.168.31.127
+
+# LOCAL POSM DB config
 POSM_DB_NAME=osm
 POSM_DB_USER=osm
 POSM_DB_PASSWORD=pass-word
-AOI_ROOT=/aoi
-AOI_NAME=Jawalakhel
-ORIGINAL_AOI_NAME=jawalakhel.osm
 
-# For osmosis, because it is run outside docker
+
+# AOI Specific files and paths
+
+# The root is generally /aoi and it is the path within docker container mapped with host's /opt/data/aoi
+# No need to change this
+AOI_ROOT=/aoi
+# The directory name of the AOI, resides inside AOI_ROOT
+AOI_NAME=Jawalakhel
+# Original aoi file name, which also resides inside AOI_ROOT
+ORIGINAL_AOI_FILE_NAME=jawalakhel.osm
+
+# Config for running osmosis from inside docker
+
+# osmosis db host is the ip of posm itself
 OSMOSIS_DB_HOST=192.168.31.127
+# Since osmosis is run outside docker container, it needs host path instead of path inside docker
+# And it can be seen in docker-compose file that /opt/data/aoi from host is mapped to /aoi inside docker container
 OSMOSIS_AOI_ROOT=/opt/data/aoi
 
-# DB setting for server app
+# DB setting for server app, No need to change this
 DATABASE_NAME=postgres
 DATABASE_USER=postgres
 DATABASE_PASSWORD=password
 
+
+# OAUTH config
+
+# Consumer keys and secrets
 OAUTH_CONSUMER_KEY=consumerkeyLSDFJKDSLFKJsldkfjsdl
 OAUTH_CONSUMER_SECRET=consumersecretLSDFJKDSLFKJsldkfjsdl
+# In production use production osm api endpoints
 OAUTH_API_URL=https://master.apis.dev.openstreetmap.org
 
+# In production use production osm api endpoints
 REQUEST_TOKEN_URL=https://master.apis.dev.openstreetmap.org/oauth/request_token
 ACCESS_TOKEN_URL=https://master.apis.dev.openstreetmap.org/oauth/access_token
 AUTHORIZE_URL=https://master.apis.dev.openstreetmap.org/oauth/authorize

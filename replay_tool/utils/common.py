@@ -62,9 +62,9 @@ def get_current_aoi_path() -> str:
 
 def get_original_aoi_path() -> str:
     aoi_path = get_aoi_path()
-    original_aoi_name = os.environ.get('ORIGINAL_AOI_NAME')
+    original_aoi_name = os.environ.get('ORIGINAL_AOI_FILE_NAME')
     if not original_aoi_name:
-        raise Exception('ORIGINAL_AOI_NAME should be defined in the env')
+        raise Exception('ORIGINAL_AOI_FILE_NAME should be defined in the env')
     return os.path.join(aoi_path, original_aoi_name)
 
 

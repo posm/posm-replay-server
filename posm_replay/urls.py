@@ -23,7 +23,6 @@ from replay_tool.views import (
     ConflictsViewSet,
     trigger,
     retrigger,
-    push_upstream,
     reset,
     LoginPageView,
 )
@@ -40,9 +39,7 @@ urlpatterns = [
     path('api/v1/trigger/', trigger),
     path('api/v1/reset/', reset),
     path('api/v1/re-trigger/', retrigger),
-    # path('accounts/profile/', push_upstream),
     path('api/v1/', include(router.urls)),
     path('login/', LoginPageView.as_view()),
-    # path('complete/openstreetmap/', push_upstream),
     path('', include('social_django.urls', namespace='social')),
 ]
