@@ -1,6 +1,8 @@
 import osmium
 import os
 
+from typing import Dict, List
+
 from replay_tool.serializers.osm import (
     NodeSerializer,
     WaySerializer,
@@ -28,6 +30,13 @@ class VersionHandler(osmium.SimpleHandler):
         self.relations_versions[r.id] = r.version
 
 
+def elem_in_tracker(eid, etype, tracker):
+    return \
+        eid in tracker.referenced_elements[etype] \
+        or eid in tracker.added_elements[etype] \
+        or eid in tracker.deleted_elements[etype]
+
+
 class AOIHandler(osmium.SimpleHandler):
     """
     Stores AOI elements as keys values pair, along with total count
@@ -39,6 +48,10 @@ class AOIHandler(osmium.SimpleHandler):
         super().__init__()
         self.tracker = tracker
         self.ref_osm_path = ref_osm_path
+        self.nodes_references_by_ways: Dict[int, List[int]] = {}
+        self.nodes_references_by_relations: Dict[int, List[int]] = {}
+        # TODO: may need ways references by relations and
+        # relations references by relations
 
         # osmfile to write referenced/added elements only
         try:
@@ -47,22 +60,54 @@ class AOIHandler(osmium.SimpleHandler):
             pass
 
         self.writer = osmium.SimpleWriter(ref_osm_path)
+        # We need nodes writer as well because nodes referenced won't be
+        # present in geojson which is extracted later
+        # (the library osm2geojson does not include refrerenced nodes in geojson)
+        nodes_ref_path = ref_osm_path + '.nodes.osm'
+        try:
+            os.remove(nodes_ref_path)
+        except OSError:
+            pass
+        self.nodes_writer = osmium.SimpleWriter(nodes_ref_path)
 
         self.nodes_count = 0
         self.ways_count = 0
         self.relations_count = 0
 
-        self.nodes: dict = {}
-        self.ways: dict = {}
-        self.relations: dict = {}
+        self.nodes: Dict[int, dict] = {}
+        self.ways: Dict[int, dict] = {}
+        self.relations: Dict[int, dict] = {}
+        self.referring_ways: Dict[int, dict] = {}
+        self.referring_relations: Dict[int, dict] = {}
 
-        self._nodes: dict = {}
-        self._ways: dict = {}
+        self._nodes: Dict[int, object] = {}
+        self._ways: Dict[int, object] = {}
+        self._relations: Dict[int, object] = {}
 
     def apply_file_and_cleanup(self, filename):
         self.apply_file(filename)
 
+        # Add to writer, the referenced nodes and elements because they need to be shown in the ui
+        # The idea is to add the ways and relations which reference nodes that
+        # are referenced in the changesets
+        for nodeid in self.tracker.referenced_elements['nodes']:
+            for wayid in self.nodes_references_by_ways.get(nodeid, []):
+                if wayid not in self.tracker.referenced_elements['ways']:
+                    self.referring_ways[wayid] = WaySerializer(self._ways[wayid]).data
+                    for node in self._ways[wayid].nodes:
+                        if node.ref not in self.nodes:
+                            self.writer.add_node(self._nodes[node.ref])
+                    self.writer.add_way(self._ways[wayid])
+            for relid in self.nodes_references_by_relations.get(nodeid, []):
+                if relid not in self.tracker.referenced_elements['relations']:
+                    self.referring_relations[relid] = RelationSerializer(self._relations[relid]).data
+                    for member in self._relations[relid].members:
+                        if member.type == 'node' and member.ref not in self.nodes:
+                            self.writer.add_node(self._nodes[member.ref])
+                    self.writer.add_relation(self._relations[relid])
+
         self.writer.close()
+        self.nodes_writer.close()
 
         self._nodes.clear()
         self._ways.clear()
@@ -70,31 +115,52 @@ class AOIHandler(osmium.SimpleHandler):
     def node(self, n):
         self._nodes[n.id] = n
         self.nodes_count += 1
-        if n.id in self.tracker.referenced_elements['nodes'] or n.id in self.tracker.added_elements['nodes']:
-            self.writer.add_node(n)
+        if elem_in_tracker(n.id, 'nodes', self.tracker):
             self.nodes[n.id] = NodeSerializer(n).data
+            # Write to writer to get osm file which is later converted to geojson
+            self.writer.add_node(n)
+            # Add it to node writer as well
+            self.nodes_writer.add_node(n)
 
     def way(self, w):
         self._ways[w.id] = w
         self.ways_count += 1
-        if w.id in self.tracker.referenced_elements['ways'] or w.id in self.tracker.added_elements['ways']:
+        # Add way to node references
+        for node in w.nodes:
+            self.nodes_references_by_ways[node.ref] = [
+                *self.nodes_references_by_ways.get(node.ref, []),
+                w.id
+            ]
+
+        if elem_in_tracker(w.id, 'ways', self.tracker):
+            self.ways[w.id] = WaySerializer(w).data
+            # Write to writer to get osm file which is later converted to geojson
             for node in w.nodes:
                 self.writer.add_node(self._nodes[node.ref])
             self.writer.add_way(w)
-            self.ways[w.id] = WaySerializer(w).data
 
     def relation(self, r):
+        self._relations[r.id] = r
         self.relations_count += 1
-        if r.id in self.tracker.referenced_elements['relations'] or r.id in self.tracker.added_elements['relations']:
+        # Add relation to node references
+        for member in r.members:
+            if member.type == 'n':
+                self.nodes_references_by_relations[member.ref] = [
+                    *self.nodes_references_by_relations.get(member.ref, []),
+                    r.id
+                ]
+        if elem_in_tracker(r.id, 'relations', self.tracker):
+            self.relations[r.id] = RelationSerializer(r).data
+            # Write to writer to get osm file which is later converted to geojson
             for member in r.members:
-                if member.type == 'way':
+                if member.type == 'w':
                     for node in self._ways[member.ref].nodes:
                         self.writer.add_node(self._nodes[node.ref])
                     self.writer.add_way(self._ways[member.ref])
-                elif member.type == 'node':
+                elif member.type == 'n':
                     self.writer.add_node(self._nodes[member.ref])
+                # TODO: member.type == 'relation'
             self.writer.add_relation(r)
-            self.relations[r.id] = RelationSerializer(r).data
 
 
 class OSMElementsTracker:
@@ -131,13 +197,13 @@ class OSMElementsTracker:
     def get_deleted_elements(self, aoi_handler):
         return {
             'nodes': [
-                aoi_handler.nodes[k] for k in self.deleted_elements['nodes']
+                {'id': k, 'deleted': True} for k in self.deleted_elements['nodes']
             ],
             'ways': [
-                aoi_handler.ways[k] for k in self.deleted_elements['ways']
+                {'id': k, 'deleted': True} for k in self.deleted_elements['ways']
             ],
             'relations': [
-                aoi_handler.relations[k] for k in self.deleted_elements['relations']
+                {'id': k, 'deleted': True} for k in self.deleted_elements['relations']
             ],
         }
 
@@ -151,6 +217,28 @@ class OSMElementsTracker:
             ],
             'relations': [
                 aoi_handler.relations[k] for k in self.modified_elements['relations']
+            ],
+        }
+
+    def get_referenced_elements(self, aoi_handler):
+        return {
+            'nodes': [
+                aoi_handler.nodes.get(
+                    k,
+                    {'id': k, 'deleted': True}
+                ) for k in self.referenced_elements['nodes']
+            ],
+            'ways': [
+                aoi_handler.ways.get(
+                    k,
+                    {'id': k, 'deleted': True}
+                ) for k in self.referenced_elements['ways']
+            ],
+            'relations': [
+                aoi_handler.relations.get(
+                    k,
+                    {'id': k, 'deleted': True}
+                ) for k in self.referenced_elements['relations']
             ],
         }
 
@@ -169,6 +257,9 @@ class ElementsFilterHandler(osmium.SimpleHandler):
     def __init__(self, elements_tracker):
         super().__init__()
         self.elements_tracker = elements_tracker
+        self.nodes: Dict[int, object] = {}
+        self.ways: Dict[int, object] = {}
+        self.relations: Dict[int, object] = {}
 
     @property
     def added_elements(self):

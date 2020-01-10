@@ -4,8 +4,6 @@ from rest_framework import serializers
 class LocationSerializer(serializers.Serializer):
     lat = serializers.FloatField()
     lon = serializers.FloatField()
-    x = serializers.IntegerField()
-    y = serializers.IntegerField()
 
 
 class TagSerializer(serializers.Serializer):

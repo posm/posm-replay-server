@@ -1,27 +1,31 @@
-from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view, action
 from rest_framework.views import APIView
-from rest_framework import viewsets
+from rest_framework import viewsets, exceptions
 from rest_framework.response import Response
 
+from django.db import transaction
 
-from .tasks import task_prepare_data_for_replay_tool
+from django.views.generic.base import TemplateView
+from social_django.utils import psa
 
-from .models import ReplayTool, ConflictingOSMElement
+
+from .tasks import task_prepare_data_for_replay_tool, create_and_push_changeset
+
+from .models import ReplayTool, OSMElement
 from .serializers.models import (
     ReplayToolSerializer,
-    ConflictingOSMElementSerializer,
-    MiniConflictingOSMElementSerializer,
+    OSMElementSerializer,
+    MiniOSMElementSerializer,
 )
 
 META_KEYS = [
-    'id', 'uid', 'user', 'version', 'location', 'changeset', 'timestamp',
+    'id', 'uid', 'user', 'version', 'changeset', 'timestamp',
 ]
 
 
 class ReplayToolView(APIView):
     def get(self, request, version=None, format=None):
-        tool = ReplayTool.objects.get()
+        tool, _ = ReplayTool.objects.get_or_create(defaults={'is_current_state_complete': True})
         return Response(ReplayToolSerializer(tool).data)
 
 
@@ -29,10 +33,9 @@ class ReplayToolView(APIView):
 def trigger(request):
     tool = ReplayTool.objects.get()
     if not tool.is_initiated:
-        ReplayTool.reset()
         task_prepare_data_for_replay_tool.delay()
         return Response({'message': 'ReplayTool has been successfully triggered.'})
-    return Response({'message': 'Replay Tool has already been triggered.'})
+    raise exceptions.ValidationError('Already triggered.')
 
 
 @api_view(['POST'])
@@ -48,16 +51,71 @@ def reset(request):
     return Response({'message': 'Replay Tool has been successfully reset.'})
 
 
+# @api_view(['POST'])
+# @psa('social:complete')
+def push_upstream(request):
+    token = request.GET.get('access_token')
+    url = 'https://master.apis.dev.openstreetmap.org/api/0.6/changeset/create'
+    response = request.backend.oauth_request(request.backend, token, url, method='PUT')
+    print(response.status_code, response.text)
+
+    # data = request.data
+    # oauth_token = data.get('oauth_token')
+    # oauth_token_secret = data.get('oauth_token_secret')
+    # if not oauth_token:
+        # raise exceptions.ValidationError({'oauth_token': 'This field must be present.'})
+    # if not oauth_token_secret:
+        # raise exceptions.ValidationError({'oauth_token_secret': 'This field must be present.'})
+    # # Check for replay tool's status
+    # replay_tool = ReplayTool.objects.get()
+    # if replay_tool.state != ReplayTool.STATUS_RESOLVED:
+        # raise exceptions.ValidationError('All the conflicts have not been resolved')
+
+    # # Call the task
+    # replay_tool.state = ReplayTool.STATUS_PUSH_CONFLICTS
+    # replay_tool.save()
+    # create_and_push_changeset.delay(oauth_token, oauth_token_secret)
+    # return Response({
+        # 'message': 'The changes are being pushed upstream'
+    # })
+
+
 class ConflictsViewSet(viewsets.ModelViewSet):
-    queryset = conflicting_elements = ConflictingOSMElement.objects.filter(
-        local_state=ConflictingOSMElement.LOCAL_STATE_CONFLICTING,
-        is_resolved=False,
-    )
+    queryset = OSMElement.get_all_conflicting_elements()
 
     def get_serializer_class(self):
         if self.action == 'list':
-            return MiniConflictingOSMElementSerializer
-        return ConflictingOSMElementSerializer
+            return MiniOSMElementSerializer
+        return OSMElementSerializer
+
+    @action(
+        detail=False,
+        methods=['get'],
+        url_path=r'all',
+    )
+    def all_elements(self, request):
+        queryset = OSMElement.get_all_local_elements()
+        self.page = self.paginate_queryset(queryset)
+        serializer = self.get_serializer(self.page, many=True)
+        return self.get_paginated_response(serializer.data)
+
+    @action(
+        detail=True,
+        methods=['put'],
+        url_path='reset',
+    )
+    def reset_element(self, request, pk=None):
+        osm_element = self.get_object()
+
+        osm_element.resolved_data = {}
+        osm_element.status = OSMElement.STATUS_UNRESOLVED
+        osm_element.resolved_from = None
+        osm_element.save()
+
+        # Update the referenced elements
+        reset_referenced_elements(osm_element)
+
+        return Response(OSMElementSerializer(osm_element).data)
 
     @action(
         detail=True,
@@ -66,14 +124,19 @@ class ConflictsViewSet(viewsets.ModelViewSet):
     )
     def update_element(self, request, pk=None):
         osm_element = self.get_object()
-        data = self.validate_and_process_data(request.data)
-        curr_resolved_data = osm_element.resolved_data or {}
+        data = self.validate_and_process_data(request.data, osm_element)
+
         osm_element.resolved_data = {
-            **curr_resolved_data,
-            **data
+            **data,
+            'id': osm_element.element_id
         }
+        osm_element.status = OSMElement.STATUS_PARTIALLY_RESOLVED
         osm_element.save()
-        return Response(ConflictingOSMElementSerializer(osm_element).data)
+
+        # Update the referenced elements
+        update_referenced_elements(osm_element)
+
+        return Response(OSMElementSerializer(osm_element).data)
 
     @action(
         detail=True,
@@ -82,21 +145,117 @@ class ConflictsViewSet(viewsets.ModelViewSet):
     )
     def resolve_element(self, request, pk=None):
         osm_element = self.get_object()
-        data = self.validate_and_process_data(request.data)
-        curr_resolved_data = osm_element.resolved_data or {}
+        data = self.validate_and_process_data(request.data, osm_element)
+
         osm_element.resolved_data = {
-            **curr_resolved_data,
-            **data
+            **data,
+            'id': osm_element.element_id
         }
-        osm_element.is_resolved = True
+        osm_element.status = OSMElement.STATUS_RESOLVED
+        osm_element.resolved_from = OSMElement.RESOLVED_FROM_CUSTOM
         osm_element.save()
-        return Response(ConflictingOSMElementSerializer(osm_element).data)
+        # Resolve the referenced elements
+        resolve_referenced_elements(osm_element)
+
+        if OSMElement.get_conflicting_elements().count() == 0:
+            replay_tool = ReplayTool.objects.get()
+            replay_tool.state = ReplayTool.STATUS_RESOLVED
+            replay_tool.save()
+        return Response(OSMElementSerializer(osm_element).data)
+
+    @action(
+        detail=True,
+        methods=['put'],
+        url_path=r'resolve/(?P<whose>(theirs|ours))',
+    )
+    def resolve_theirs_or_ours(self, request, whose, pk=None):
+        osm_element = self.get_object()
+        if whose == 'theirs':
+            osm_element.resolved_data = osm_element.upstream_data
+        else:
+            osm_element.resolved_data = osm_element.local_data
+        osm_element.status = OSMElement.STATUS_RESOLVED
+        osm_element.resolved_from = whose
+        osm_element.save()
+
+        # Resolve the referenced elements
+
+        # Note that while completely resolving theirs/ours, resolved data does not
+        # contain the conflicting nodes info, which is looked into by the `resolve_referenced_elements`
+        # function. So manually collect the referenced elements and update them
+        for elem in osm_element.referenced_elements.all():
+            elem.resolved_data = elem.upstream_data if whose == 'theirs' else elem.local_data
+            elem.resolved_from = whose
+            elem.save()
+        # resolve_referenced_elements(osm_element)
+
+        if OSMElement.get_conflicting_elements().count() == 0:
+            replay_tool = ReplayTool.objects.get()
+            replay_tool.state = ReplayTool.STATUS_RESOLVED
+            replay_tool.save()
+        return Response(OSMElementSerializer(osm_element).data)
 
     def remove_meta_keys(self, data):
         for key in META_KEYS:
             data.pop(key, None)
         return data
 
-    def validate_and_process_data(self, data):
+    def validate_and_process_data(self, data, osm_element):
+        if osm_element.type == OSMElement.TYPE_NODE:
+            data.pop('conflicting_nodes', None)
+        else:
+            data.pop('location', None)
         data = self.remove_meta_keys(data)
         return data
+
+
+@transaction.atomic
+def reset_referenced_elements(osm_element: OSMElement) -> None:
+    if osm_element.type == OSMElement.TYPE_NODE:
+        return
+    nodes = osm_element.resolved_data.get('conflicting_nodes') or {}
+
+    for nid, location_data in nodes.items():
+        node = OSMElement.objects.get(element_id=nid, type=OSMElement.TYPE_NODE)
+        node.resolved_data = {}
+        node.status = OSMElement.STATUS_UNRESOLVED
+        node.resolved_from = None
+        node.save()
+
+
+def update_referenced_elements(osm_element: OSMElement) -> None:
+    if osm_element.type == OSMElement.TYPE_NODE:
+        return
+    nodes = osm_element.resolved_data.get('conflicting_nodes') or {}
+
+    for nid, location_data in nodes.items():
+        node = OSMElement.objects.get(element_id=nid, type=OSMElement.TYPE_NODE)
+        node.resolved_data['location'] = {
+            'lat': location_data['lat'],
+            'lon': location_data['lon'],
+        }
+        node.status = OSMElement.STATUS_PARTIALLY_RESOLVED
+        node.save()
+
+
+def resolve_referenced_elements(osm_element: OSMElement) -> None:
+    if osm_element.type == OSMElement.TYPE_NODE:
+        return
+    nodes = osm_element.resolved_data.get('conflicting_nodes') or {}
+
+    for nid, location_data in nodes.items():
+        node = OSMElement.objects.get(element_id=nid, type=OSMElement.TYPE_NODE)
+        node.resolved_data['location'] = {
+            'lat': location_data['lat'],
+            'lon': location_data['lon'],
+        }
+        node.status = OSMElement.STATUS_RESOLVED
+        node.resolved_from = OSMElement.RESOLVED_FROM_CUSTOM
+        node.save()
+
+
+class LoginPageView(TemplateView):
+    template_name = "login.html"
+
+    def get_context_data(self, **kwargs):
+        return super().get_context_data(**kwargs)

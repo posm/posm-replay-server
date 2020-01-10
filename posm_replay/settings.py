@@ -29,6 +29,12 @@ ALLOWED_HOSTS = ['*']
 CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_CREDENTIALS = True
 
+# SOCIAL AUTH
+SOCIAL_AUTH_OPENSTREETMAP_KEY = os.environ.get('OAUTH_CONSUMER_KEY')
+SOCIAL_AUTH_OPENSTREETMAP_SECRET = os.environ.get('OAUTH_CONSUMER_SECRET')
+SOCIAL_AUTH_POSTGRES_JSONFIELD = True
+SOCIAL_AUTH_LOGIN_REDIRECT_URL = '/'
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -42,9 +48,15 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'djangorestframework_camel_case',
+    'social_django',
 
     'replay_tool',
 ]
+
+AUTHENTICATION_BACKENDS = (
+    'posm_replay.backends.CustomOSMOAuth',
+    'django.contrib.auth.backends.ModelBackend',
+)
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
@@ -94,6 +106,7 @@ LOGGING = {
         },
     }
 }
+
 
 CELERY_REDIS_URL = os.environ.get('CELERY_REDIS_URL', 'redis://redis:6379/0')
 CELERY_BROKER_URL = CELERY_REDIS_URL

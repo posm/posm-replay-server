@@ -24,6 +24,7 @@ from replay_tool.views import (
     trigger,
     retrigger,
     reset,
+    LoginPageView,
 )
 
 
@@ -39,4 +40,6 @@ urlpatterns = [
     path('api/v1/reset/', reset),
     path('api/v1/re-trigger/', retrigger),
     path('api/v1/', include(router.urls)),
+    path('login/', LoginPageView.as_view()),
+    path('', include('social_django.urls', namespace='social')),
 ]
