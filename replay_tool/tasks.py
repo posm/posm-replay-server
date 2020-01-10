@@ -21,7 +21,6 @@ from .utils.decorators import set_error_status_on_exception
 from .utils.osm_api import (
     get_changeset_data,
     get_changeset_meta,
-    create_changeset,
 )
 from .utils.transformations import ChangesetsToXMLWriter
 from .utils.osmium_handlers import (

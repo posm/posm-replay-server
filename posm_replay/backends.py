@@ -5,7 +5,7 @@ from xml.dom import minidom
 from social_core.backends.openstreetmap import OpenStreetMapOAuth
 
 from replay_tool.models import UpstreamChangeSet, OSMElement
-from replay_tool.utils.osm_api import create_changeset_creation_xml
+from replay_tool.utils.common import create_changeset_creation_xml
 from replay_tool.utils.common import get_aoi_name
 from replay_tool.tasks import create_and_push_changeset
 
@@ -15,7 +15,7 @@ logger = logging.getLogger('__name__')
 
 
 class CustomOSMOAuth(OpenStreetMapOAuth):
-    AUTHORIZATION_URL = os.environ['AUTHORISE_URL']
+    AUTHORIZATION_URL = os.environ['AUTHORIZE_URL']
     REQUEST_TOKEN_URL = os.environ['REQUEST_TOKEN_URL']
     ACCESS_TOKEN_URL = os.environ['ACCESS_TOKEN_URL']
     API_URL = os.environ.get('OAUTH_API_URL', 'https://master.apis.dev.openstreetmap.org')

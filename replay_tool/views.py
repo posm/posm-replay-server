@@ -25,7 +25,7 @@ META_KEYS = [
 
 class ReplayToolView(APIView):
     def get(self, request, version=None, format=None):
-        tool = ReplayTool.objects.get()
+        tool, _ = ReplayTool.objects.get_or_create(defaults={'is_current_state_complete': True})
         return Response(ReplayToolSerializer(tool).data)
 
 
