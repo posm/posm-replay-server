@@ -50,6 +50,7 @@ class ReplayTool(models.Model):
 
     # This will help us know at which step did it errored by looking at status
     has_errored = models.BooleanField(default=False)
+    error_details = models.TextField(null=True, blank=True)
 
     elements_data = JSONField(default=dict)
 
@@ -361,9 +362,6 @@ class OSMElement(models.Model):
             change_data['data']['version'] = self.upstream_data['version'] + 1
         else:
             raise Exception(f"Invalid value 'f{self.local_state}' for local state")
-
-        if self.type == 'way':
-            print(change_data)
 
         if self.type == 'node':
             # The location info is either the local location data or location data

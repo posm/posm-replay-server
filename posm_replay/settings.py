@@ -33,7 +33,7 @@ CORS_ALLOW_CREDENTIALS = True
 SOCIAL_AUTH_OPENSTREETMAP_KEY = 'rb4UgLe3644qDTZcaso59jfLTcNHm8Ua7r044ukS'
 SOCIAL_AUTH_OPENSTREETMAP_SECRET = 'JBgLWlMxkTQrZckoennteqQYUFLrFrSuebNjS5Xq'
 SOCIAL_AUTH_POSTGRES_JSONFIELD = True
-# SOCIAL_AUTH_LOGIN_REDIRECT_URL = '/api/v1/push-upstream/'
+SOCIAL_AUTH_LOGIN_REDIRECT_URL = '/'
 
 # Application definition
 
@@ -107,10 +107,6 @@ LOGGING = {
     }
 }
 
-
-SOCIAL_AUTH_PIPELINE = (
-    'posm_replay.pipelines.osm_oauth_pipeline',
-)
 
 CELERY_REDIS_URL = os.environ.get('CELERY_REDIS_URL', 'redis://redis:6379/0')
 CELERY_BROKER_URL = CELERY_REDIS_URL

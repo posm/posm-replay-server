@@ -1,6 +1,7 @@
 import requests
 import time
 import os
+import pickle
 import tempfile
 
 import psycopg2
@@ -446,45 +447,15 @@ def generate_geojsons(osmpath):
     prev_state=ReplayTool.STATUS_RESOLVED,
     curr_state=ReplayTool.STATUS_PUSHED_UPSTREAM
 )
-def create_and_push_changeset(oauth_token, oauth_token_secret, comment=None):
-    aoiname = get_aoi_name()
-    comment = comment or f"Updates on POSM in area '{aoiname}'"
-    # TODO: get version
-    version = '1.1'
+def create_and_push_changeset(osm_oauth_backend):
+    # Create changeset
+    changeset = osm_oauth_backend.get_or_create_changeset()
 
-    # Get added elements
-    added_nodes = OSMElement.get_added_elements('node')
-    added_ways = OSMElement.get_added_elements('way')
-    added_relations = OSMElement.get_added_elements('relation')
+    # Upload the changeset
+    osm_oauth_backend.upload_changeset(changeset.changeset_id)
 
-    # Map ids, map of locally created elements ids and ids to be sent to upstream(negative values)
-    # The mapped ids will be used wherever the elements are referenced
-    new_nodes_ids_map = {x.element_id: -(i + 1) for i, x in enumerate(added_nodes)}
-    new_ways_ids_map = {x.element_id: -(i + 1) for i, x in enumerate(added_ways)}
-    new_relations_ids_map = {x.element_id: -(i + 1) for i, x in enumerate(added_relations)}
-
-    changeset_id = create_changeset(comment, version)
-    changeset_writer = ChangesetsToXMLWriter()
-
-    to_send_elements = OSMElement.objects.filter(
-        ~models.Q(local_state=OSMElement.LOCAL_STATE_REFERRING),
-        ~models.Q(status=OSMElement.STATUS_UNRESOLVED),
-    )
-    for element in to_send_elements:
-        changeset_data = element.get_osm_change_data()
-        # The data does not have locally added elements ids set to negative
-        # So replace ids by negative ids if added
-        changeset_data = replace_new_element_ids(
-            changeset_data,
-            new_nodes_ids_map,
-            new_ways_ids_map,
-            new_relations_ids_map,
-        )
-        changeset_data['data']['changeset'] = changeset_id
-        changeset_writer.add_change(changeset_data)
-    print(changeset_writer.get_xml())
-    # TODO: send to OSM, probably after receiving oauth token
-    return changeset_id
+    # Close the changeset
+    osm_oauth_backend.close_changeset(changeset.changeset_id)
 
 
 @shared_task

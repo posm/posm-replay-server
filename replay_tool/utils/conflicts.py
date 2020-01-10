@@ -110,5 +110,4 @@ def get_conflicting_elements(
             upstream_changed_relations,
         ),
     }
-    print(conflicting_elems['nodes'])
     return conflicting_elems
