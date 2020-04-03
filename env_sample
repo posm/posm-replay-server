@@ -1,12 +1,12 @@
-# USE posm's ip and port 81 as OSM_BASE_URL
-OSM_BASE_URL=http://192.168.31.127:81
-# USE posm's ip
-POSM_DB_HOST=192.168.31.127
+# USE posm's ip and port 81 as OSM_BASE_URL, probably no need to change
+OSM_BASE_URL=http://172.16.1.1:81
+# USE posm's ip, probably no need to change
+POSM_DB_HOST=172.16.1.1
 
-# LOCAL POSM DB config
+# LOCAL POSM DB config, no need to change
 POSM_DB_NAME=osm
 POSM_DB_USER=osm
-POSM_DB_PASSWORD=pass-word
+POSM_DB_PASSWORD=openstreetmap
 
 
 # AOI Specific files and paths
@@ -14,15 +14,15 @@ POSM_DB_PASSWORD=pass-word
 # The root is generally /aoi and it is the path within docker container mapped with host's /opt/data/aoi
 # No need to change this
 AOI_ROOT=/aoi
-# The directory name of the AOI, resides inside AOI_ROOT
+# The directory name of the AOI, resides inside AOI_ROOT, CHANGE THIS to your downloaded aoi's name
 AOI_NAME=Jawalakhel
-# Original aoi file name, which also resides inside AOI_ROOT
-ORIGINAL_AOI_FILE_NAME=jawalakhel.osm
+# Original aoi file name, which also resides inside AOI_ROOT, probably no need to change
+ORIGINAL_AOI_FILE_NAME=local_aoi.osm
 
 # Config for running osmosis from inside docker
 
-# osmosis db host is the ip of posm itself
-OSMOSIS_DB_HOST=192.168.31.127
+# osmosis db host is the ip of posm itself, probably no need to change
+OSMOSIS_DB_HOST=172.16.1.1
 # Since osmosis is run outside docker container, it needs host path instead of path inside docker
 # And it can be seen in docker-compose file that /opt/data/aoi from host is mapped to /aoi inside docker container
 OSMOSIS_AOI_ROOT=/opt/data/aoi
@@ -30,7 +30,7 @@ OSMOSIS_AOI_ROOT=/opt/data/aoi
 # DB setting for server app, No need to change this
 DATABASE_NAME=postgres
 DATABASE_USER=postgres
-DATABASE_PASSWORD=password
+DATABASE_PASSWORD=postgres
 
 
 # OAUTH config
