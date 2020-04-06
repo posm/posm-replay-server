@@ -9,18 +9,20 @@ The **docker-compose** configurations are located at `/opt/replay_tool/posm-repl
 The host directory `/opt/data/aoi/` is mapped to the directory `/aoi` inside docker environment. 
 
 
-
 **Posm Replay Client** does not need speial configuration. It is automatically
 set up from posm-build iso. 
 
 
 When the POSM runs in NUC, the server is up and running along with the client,
-which is just a bunch of static html/js files. However, the information about
+which is just a bunch of static html/js files. However, some information about
 AOI, endpoints from where local changesets are collected and database
 information need to be configured. The configuration variables reside as
 environment variables in the file `/opt/replay-tool/posm-replay-server/.env`.
 The variables that need to be set are described below. The file `sample_env`
-also contains sample values for the variables.
+also contains sample values for the variables. 
+
+**NOTE:** Just change the value for AOI_NAME above which is the name of directory for aoi inside `/opt/data/aoi/` directory.
+Other fields need not be changed.
 
 - **OSM_BASE_URL**: This is the local osm endpoint where the server makes calls to gather the changesets. The value should be POSM's IP with port 81.
 - **POSM_DB_HOST**: This is used to make local osm database queries to get the `first changeset id`. It's value is also POSM's IP.
@@ -35,8 +37,10 @@ also contains sample values for the variables.
 
 Database settings for server:
 - **DATABASE_NAME**: Need not change.
-- **DATABASE_USER**: Need not change
-- **DATABASE_PASSWORD**: Change it.
+- **DATABASE_USER**: Need not change.
+- **DATABASE_PASSWORD**: Need not change.
+
+**NOTE:** Change the following values appropriately.
 
 OAuth Config:
 - **OAUTH_CONSUMER_KEY**: OAuth app Consumer Key
@@ -46,3 +50,6 @@ OAuth Config:
 - **REQUEST_TOKEN_URL**: <OSM_API_URL>/oauth/request_token
 - **ACCESS_TOKEN_URL**: <OSM_API_URL>/oauth/access_token
 - **AUTHORIZE_URL**: <OSM_API_URL>/oauth/authorize
+
+## Restarting the service
+The corresponding service for replay tool is `replay-tool.service`. Make sure you restart the service whenever there are modifications in the `.env` configuration.
