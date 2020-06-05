@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from replay_tool.models import ReplayTool, LocalChangeSet, OSMElement
+from replay_tool.models import ReplayTool, LocalChangeSet, OSMElement, ReplayToolConfig
 
 from replay_tool.utils.common import (
     get_current_aoi_info, get_aoi_name,
@@ -29,6 +29,12 @@ class ReplayToolSerializer(serializers.ModelSerializer):
             'local_elements_count': OSMElement.get_all_local_elements().count(),
             'upstream_elements_count': obj.elements_data.get('upstream'),
         }
+
+
+class ReplayToolConfigSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReplayToolConfig
+        fields = '__all__'
 
 
 class OSMElementSerializer(serializers.ModelSerializer):

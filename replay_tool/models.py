@@ -15,6 +15,96 @@ class ChangeData(TypedDict):
     data: dict
 
 
+class ReplayToolConfig(models.Model):
+    osm_base_url = models.CharField(
+        max_length=100,
+        default="http://172.16.1.1:81",
+        help_text="Enter POSM's schema://IP:port that's serving osm."
+    )
+    posm_db_host = models.CharField(
+        max_length=100,
+        default="172.16.1.1",
+        help_text="POSM's IP which listens to psql connections."
+    )
+    posm_db_name = models.CharField(
+        max_length=100,
+        default="osm",
+        help_text="OSM Database Name"
+    )
+    posm_db_user = models.CharField(
+        max_length=100,
+        default="osm",
+        help_text="OSM Database User"
+    )
+    posm_db_password = models.CharField(
+        max_length=100,
+        default="openstreetmap",
+        help_text="OSM Database password"
+    )
+    aoi_root = models.CharField(
+        max_length=100,
+        default="/aoi",
+        help_text="Path inside docker mapped with host's /opt/data/aoi"
+    )
+    aoi_name = models.CharField(
+        max_length=100,
+        default="",
+        help_text="Directory name of AOI which contains manifest.json and other files."
+    )
+    osmosis_db_host = models.CharField(
+        max_length=100,
+        default="172.16.1.1",
+        help_text="This is probably the IP of POSM itself"
+    )
+    osmosis_aoi_root = models.CharField(
+        max_length=100,
+        default="/opt/data/aoi",
+        help_text="Host AOI root location."
+    )
+    oauth_consumer_key = models.CharField(
+        max_length=300,
+        default="",
+        help_text="OSM OAUTH consumer key"
+    )
+    oauth_consumer_secret = models.CharField(
+        max_length=300,
+        default="",
+        help_text="OSM OAUTH consumer secret"
+    )
+    overpas_api_url = models.CharField(
+        max_length=100,
+        default="http://overpass-api.de/api/interpreter",
+        help_text="Overpass api from where upstream data is pulled"
+    )
+
+    request_token_url = models.CharField(
+        max_length=300,
+        default="https://master.apis.dev.openstreetmap.org/oauth/request_token",
+        help_text="OSM OAuth api endpoint for request token"
+    )
+    access_token_url = models.CharField(
+        max_length=300,
+        default="https://master.apis.dev.openstreetmap.org/oauth/access_token",
+        help_text="OSM OAuth api endpoint for access token"
+    )
+    authorize_url = models.CharField(
+        max_length=300,
+        default="https://master.apis.dev.openstreetmap.org/oauth/authorize",
+        help_text="OSM OAuth api endpoint for authorization"
+    )
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls):
+        return cls.objects.get_or_create(pk=1)
+
+    def delete(self, *args, **kwargs):
+        pass
+
+
 class ReplayTool(models.Model):
     """Singleton model that stores state of replay tool"""
     STATUS_NOT_TRIGGERRED = 'not_triggered'  # State 0, initial state
@@ -55,7 +145,7 @@ class ReplayTool(models.Model):
     elements_data = JSONField(default=dict)
 
     def __str__(self):
-        return self.status
+        return self.state
 
     @property
     def is_initiated(self):
@@ -68,6 +158,7 @@ class ReplayTool(models.Model):
         r.is_current_state_complete = True
         r.elements_data = dict()
         r.has_errored = False
+        r.error_details = None
         # Delete other items
         LocalChangeSet.objects.all().delete()
         OSMElement.objects.all().delete()

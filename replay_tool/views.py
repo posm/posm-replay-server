@@ -11,11 +11,12 @@ from social_django.utils import psa
 
 from .tasks import task_prepare_data_for_replay_tool, create_and_push_changeset
 
-from .models import ReplayTool, OSMElement
+from .models import ReplayTool, OSMElement, ReplayToolConfig
 from .serializers.models import (
     ReplayToolSerializer,
     OSMElementSerializer,
     MiniOSMElementSerializer,
+    ReplayToolConfigSerializer,
 )
 
 META_KEYS = [
@@ -252,6 +253,11 @@ def resolve_referenced_elements(osm_element: OSMElement) -> None:
         node.status = OSMElement.STATUS_RESOLVED
         node.resolved_from = OSMElement.RESOLVED_FROM_CUSTOM
         node.save()
+
+
+class ReplayToolConfigViewset(viewsets.ModelViewSet):
+    queryset = ReplayToolConfig.objects.all()
+    serializer_class = ReplayToolConfigSerializer
 
 
 class LoginPageView(TemplateView):

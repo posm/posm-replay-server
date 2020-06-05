@@ -28,6 +28,7 @@ from replay_tool.views import (
     ResolvedElementsView,
     UnresolvedElementsView,
     PartialResolvedElementsView,
+    ReplayToolConfigViewset,
 )
 
 
@@ -37,6 +38,7 @@ router.register('conflicts', ConflictsViewSet, basename='conflicts')
 router.register('resolved-elements', ResolvedElementsView, basename='resolved-elements')
 router.register('unresolved-elements', UnresolvedElementsView, basename='unresolved-elements')
 router.register('partial-resolved-elements', PartialResolvedElementsView, basename='partial-resolved-elements')
+router.register('config', ReplayToolConfigViewset, basename='config')
 
 urlpatterns = [
     path('admin/', admin.site.urls),

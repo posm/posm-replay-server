@@ -1,4 +1,5 @@
 from replay_tool.models import ReplayTool
+import traceback
 
 import logging
 
@@ -36,7 +37,7 @@ def set_error_status_on_exception(prev_state=None, curr_state=None):
                 replay_tool = ReplayTool.objects.get()
                 replay_tool.has_errored = True
                 if wipe_error:
-                    replay_tool.error_details = e.args[0]
+                    replay_tool.error_details = f'{e.args[0]}: \n\n {traceback.format_exc()}'
                 replay_tool.save()
                 logger.error(f'Error during {curr_state}', exc_info=True)
                 return None
