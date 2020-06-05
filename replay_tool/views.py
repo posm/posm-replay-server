@@ -259,3 +259,18 @@ class LoginPageView(TemplateView):
 
     def get_context_data(self, **kwargs):
         return super().get_context_data(**kwargs)
+
+
+class ResolvedElementsView(viewsets.ReadOnlyModelViewSet):
+    queryset = OSMElement.get_resolved_elements()
+    serializer_class = OSMElementSerializer
+
+
+class UnresolvedElementsView(viewsets.ReadOnlyModelViewSet):
+    queryset = OSMElement.get_conflicting_elements()
+    serializer_class = OSMElementSerializer
+
+
+class PartialResolvedElementsView(viewsets.ReadOnlyModelViewSet):
+    queryset = OSMElement.get_partially_resolved_elements()
+    serializer_class = OSMElementSerializer

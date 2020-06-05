@@ -24,9 +24,9 @@ class ReplayToolSerializer(serializers.ModelSerializer):
             'date_cloned': get_aoi_created_datetime(),
             'total_conflicting_elements': OSMElement.get_all_conflicting_elements().count(),
             'total_resolved_elements': OSMElement.get_resolved_elements().count(),
+            'total_partially_resolved_elements': OSMElement.get_partially_resolved_elements().count(),
             'local_changesets_count': LocalChangeSet.objects.count(),
             'local_elements_count': OSMElement.get_all_local_elements().count(),
-            # 'local_elements_count': obj.elements_data.get('local'),
             'upstream_elements_count': obj.elements_data.get('upstream'),
         }
 
