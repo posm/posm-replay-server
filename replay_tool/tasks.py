@@ -14,7 +14,7 @@ from celery import shared_task
 
 from .models import (
     ReplayTool, LocalChangeSet,
-    OSMElement,
+    OSMElement, ReplayToolConfig,
 )
 
 from .utils.decorators import set_error_status_on_exception
@@ -37,7 +37,6 @@ from .utils.common import (
     get_current_aoi_path,
     get_overpass_query,
     filter_elements_from_aoi_handler,
-    replace_new_element_ids,
 
     # Typings
     FilteredElements,
@@ -61,13 +60,14 @@ ElementTypeStr = NewType('ElementTypeStr', str)
 
 
 def get_first_changeset_id() -> int:
-    config = {
-        'host': os.environ.get('POSM_DB_HOST'),
-        'dbname': os.environ.get('POSM_DB_NAME'),
-        'user': os.environ.get('POSM_DB_USER'),
-        'password': os.environ.get('POSM_DB_PASSWORD'),
+    config = ReplayToolConfig.load()
+    db_config = {
+        'host': config.posm_db_host,
+        'dbname': config.posm_db_name,
+        'user': config.posm_db_user,
+        'password': config.posm_db_password,
     }
-    with psycopg2.connect(**config) as conn:
+    with psycopg2.connect(**db_config) as conn:
         with conn.cursor() as cur:
             changeset_query = 'select id from changesets where num_changes > 0 order by id asc limit 1;'
             cur.execute(changeset_query)
@@ -76,14 +76,15 @@ def get_first_changeset_id() -> int:
 
 
 def collect_changesets_from_apidb(first_changeset_id):
+    config = ReplayToolConfig.load()
     changeset_id = first_changeset_id
     while True:
-        meta_data = get_changeset_meta(changeset_id)
+        meta_data = get_changeset_meta(changeset_id, config)
         if meta_data is None:
             break
         time.sleep(0.1)
         # Increment changeset id to get next one
-        data = get_changeset_data(changeset_id)
+        data = get_changeset_data(changeset_id, config)
 
         # Save changeset to db
         LocalChangeSet.objects.create(
@@ -129,15 +130,16 @@ def get_original_element_versions():
     curr_state=ReplayTool.STATUS_EXTRACTING_LOCAL_AOI
 )
 def get_local_aoi_extract():
-    db_user = os.environ.get('POSM_DB_USER')
-    db_password = os.environ.get('POSM_DB_PASSWORD')
-    osmosis_aoi_root = os.environ.get('OSMOSIS_AOI_ROOT')
-    osmosis_db_host = os.environ.get('OSMOSIS_DB_HOST')
-    aoi_name = os.environ.get('AOI_NAME')
+    config = ReplayToolConfig.load()
+    db_user = config.posm_db_user
+    db_password = config.posm_db_password
+    osmosis_aoi_root = config.osmosis_aoi_root
+    osmosis_db_host = config.osmosis_db_host
+    aoi_name = config.aoi_name
 
     if not db_user or not db_password or not osmosis_db_host or not osmosis_aoi_root or not aoi_name:
         raise Exception(
-            'OSMOSIS_AOI_ROOT, AOI_NAME, OSMOSIS_DB_HOST, POSM_DB_USER and POSM_DB_PASSWORD must all be defined in env')
+            'osmosis_aoi_root, aoi_name, osmosis_db_host, posm_db_user and posm_db_password must all be configured')
 
     path = os.path.join(osmosis_aoi_root, aoi_name, 'local_aoi.osm')
     command = f'''osmosis --read-apidb host={osmosis_db_host} user={db_user} \
@@ -171,7 +173,8 @@ def get_local_aoi_extract():
 def get_current_aoi_extract():
     [w, s, e, n] = get_current_aoi_info()['bbox']
     overpass_query = get_overpass_query(s, w, n, e)
-    response = requests.get(OVERPASS_API_URL, data={'data': overpass_query})
+    overpass_api_url = ReplayToolConfig.load().overpass_api_url
+    response = requests.get(overpass_api_url, data={'data': overpass_query})
 
     # Write response to <aoi_path>/current_aoi.osm
     with open(get_current_aoi_path(), 'wb') as f:

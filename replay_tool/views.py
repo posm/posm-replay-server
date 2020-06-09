@@ -256,6 +256,10 @@ def resolve_referenced_elements(osm_element: OSMElement) -> None:
 
 
 class ReplayToolConfigViewset(viewsets.ModelViewSet):
+    def __init__(self, *args, **kwargs):
+        ReplayToolConfig.load()
+        super().__init__(*args, **kwargs)
+
     queryset = ReplayToolConfig.objects.all()
     serializer_class = ReplayToolConfigSerializer
 

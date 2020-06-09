@@ -49,4 +49,4 @@ OAUTH_API_URL=https://master.apis.dev.openstreetmap.org
 # In production use production osm api endpoints
 REQUEST_TOKEN_URL=https://master.apis.dev.openstreetmap.org/oauth/request_token
 ACCESS_TOKEN_URL=https://master.apis.dev.openstreetmap.org/oauth/access_token
-AUTHORIZE_URL=https://master.apis.dev.openstreetmap.org/oauth/authorize
+AUTHORIZATION_URL=https://master.apis.dev.openstreetmap.org/oauth/authorize

@@ -1,10 +1,12 @@
 import os
+import six
 import threading
 from xml.dom import minidom
 
+from social_core.backends.oauth import OAuth1
 from social_core.backends.openstreetmap import OpenStreetMapOAuth
 
-from replay_tool.models import UpstreamChangeSet, OSMElement
+from replay_tool.models import UpstreamChangeSet, OSMElement, ReplayToolConfig
 from replay_tool.utils.common import create_changeset_creation_xml
 from replay_tool.utils.common import get_aoi_name
 from replay_tool.tasks import create_and_push_changeset
@@ -15,11 +17,6 @@ logger = logging.getLogger('__name__')
 
 
 class CustomOSMOAuth(OpenStreetMapOAuth):
-    AUTHORIZATION_URL = os.environ['AUTHORIZE_URL']
-    REQUEST_TOKEN_URL = os.environ['REQUEST_TOKEN_URL']
-    ACCESS_TOKEN_URL = os.environ['ACCESS_TOKEN_URL']
-    API_URL = os.environ.get('OAUTH_API_URL', 'https://master.apis.dev.openstreetmap.org')
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.osm_user = None
@@ -33,7 +30,7 @@ class CustomOSMOAuth(OpenStreetMapOAuth):
     def user_data(self, access_token, *args, **kwargs):
         """Return user data provided"""
         self._access_token = access_token
-        url = os.path.join(self.API_URL, 'api/0.6/user/details')
+        url = os.path.join(self.oauth_api_url(), 'api/0.6/user/details')
         response = self.oauth_request(
             access_token, url
         )
@@ -74,7 +71,7 @@ class CustomOSMOAuth(OpenStreetMapOAuth):
         version = '1.1'
         create_changeset_xml = create_changeset_creation_xml(comment, version)
 
-        url = os.path.join(self.API_URL, 'api/0.6/changeset/create')
+        url = os.path.join(self.oauth_api_url(), 'api/0.6/changeset/create')
         logger.info(f'OSM API URL: {url}')
         response = self.oauth_request(
             self._access_token, url, method='PUT',
@@ -93,7 +90,7 @@ class CustomOSMOAuth(OpenStreetMapOAuth):
     def upload_changeset(self, changeset_id):
         changeset_xml = OSMElement.get_upstream_changeset(changeset_id)
 
-        url = os.path.join(self.API_URL, f'api/0.6/changeset/{changeset_id}/upload')
+        url = os.path.join(self.oauth_api_url(), f'api/0.6/changeset/{changeset_id}/upload')
         logger.info(f'OSM API URL: {url}')
         response = self.oauth_request(
             self._access_token, url, method='POST',
@@ -108,7 +105,7 @@ class CustomOSMOAuth(OpenStreetMapOAuth):
         return True
 
     def close_changeset(self, changeset_id):
-        url = os.path.join(self.API_URL, f'api/0.6/changeset/{changeset_id}/close')
+        url = os.path.join(self.oauth_api_url(), f'api/0.6/changeset/{changeset_id}/close')
         logger.info(f'OSM API URL: {url}')
         response = self.oauth_request(
             self._access_token, url, method='PUT',
@@ -119,3 +116,50 @@ class CustomOSMOAuth(OpenStreetMapOAuth):
             raise Exception(f'Could not close changeset {changeset_id}. Error: {response.text}')
 
         return True
+
+    def get_key_and_secret(self):
+        """Return tuple with Consumer Key and Consumer Secret for current
+        service provider. Must return (key, secret), order *must* be respected.
+        """
+        config = ReplayToolConfig.load()
+        return config.oauth_consumer_key, config.oauth_consumer_secret
+
+    def authorization_url(self):
+        config = ReplayToolConfig.load()
+        return config.authorization_url
+
+    def access_token_url(self):
+        config = ReplayToolConfig.load()
+        return config.access_token_url
+
+    def request_token_url(self):
+        config = ReplayToolConfig.load()
+        return config.request_token_url
+
+    def oauth_api_url(self):
+        config = ReplayToolConfig.load()
+        return config.oauth_api_url
+
+    def unauthorized_token(self):
+        """Return request for unauthorized token (first stage)"""
+        params = self.request_token_extra_arguments()
+        params.update(self.get_scope_argument())
+        key, secret = self.get_key_and_secret()
+        # decoding='utf-8' produces errors with python-requests on Python3
+        # since the final URL will be of type bytes
+        decoding = None if six.PY3 else 'utf-8'
+        state = self.get_or_create_state()
+        response = self.request(
+            self.request_token_url(),
+            params=params,
+            auth=OAuth1(key, secret, callback_uri=self.get_redirect_uri(state),
+                        decoding=decoding),
+            method=self.REQUEST_TOKEN_METHOD
+        )
+        content = response.content
+        if response.encoding or response.apparent_encoding:
+            content = content.decode(response.encoding or
+                                     response.apparent_encoding)
+        else:
+            content = response.content.decode()
+        return content

@@ -3,7 +3,7 @@ from django.contrib.postgres.fields import JSONField
 
 from copy import deepcopy
 
-from .utils.common import get_osm_elems_diff, replace_new_element_ids
+from .utils.elements_utils import get_osm_elems_diff, replace_new_element_ids
 from .utils.transformations import ChangesetsToXMLWriter
 
 from mypy_extensions import TypedDict
@@ -71,10 +71,20 @@ class ReplayToolConfig(models.Model):
         default="",
         help_text="OSM OAUTH consumer secret"
     )
-    overpas_api_url = models.CharField(
+    original_aoi_file_name = models.CharField(
+        max_length=300,
+        default="local_aoi.osm",
+        help_text="File name for original aoi"
+    )
+    overpass_api_url = models.CharField(
         max_length=100,
         default="http://overpass-api.de/api/interpreter",
         help_text="Overpass api from where upstream data is pulled"
+    )
+    oauth_api_url = models.CharField(
+        max_length=100,
+        default='https://master.apis.dev.openstreetmap.org',
+        help_text="OSM oauth root api endpoint"
     )
 
     request_token_url = models.CharField(
@@ -87,7 +97,7 @@ class ReplayToolConfig(models.Model):
         default="https://master.apis.dev.openstreetmap.org/oauth/access_token",
         help_text="OSM OAuth api endpoint for access token"
     )
-    authorize_url = models.CharField(
+    authorization_url = models.CharField(
         max_length=300,
         default="https://master.apis.dev.openstreetmap.org/oauth/authorize",
         help_text="OSM OAuth api endpoint for authorization"
