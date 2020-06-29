@@ -109,7 +109,8 @@ class ReplayToolConfig(models.Model):
 
     @classmethod
     def load(cls):
-        return cls.objects.get_or_create(pk=1)
+        config, _ = cls.objects.get_or_create(pk=1)
+        return config
 
     def delete(self, *args, **kwargs):
         pass

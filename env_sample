@@ -17,7 +17,7 @@ AOI_ROOT=/aoi
 # The directory name of the AOI, resides inside AOI_ROOT, CHANGE THIS to your downloaded aoi's name
 AOI_NAME=Jawalakhel
 # Original aoi file name, which also resides inside AOI_ROOT, probably no need to change
-ORIGINAL_AOI_FILE_NAME=local_aoi.osm
+ORIGINAL_AOI_FILE_NAME=jawalakhel.osm
 # *********************************
 
 # Config for running osmosis from inside docker

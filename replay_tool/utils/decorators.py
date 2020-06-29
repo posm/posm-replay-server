@@ -8,7 +8,6 @@ def set_error_status_on_exception(prev_state=None, curr_state=None):
     """ This automatically checks for previous status of replay tool and sets status
     and errored values depending on if exception occurred or not
     """
-    # TODO: check if env vars are set
     logger = logging.getLogger(curr_state)
 
     def decorator(f):

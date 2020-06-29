@@ -22,7 +22,6 @@ from .utils.osm_api import (
     get_changeset_data,
     get_changeset_meta,
 )
-from .utils.transformations import ChangesetsToXMLWriter
 from .utils.osmium_handlers import (
     OSMElementsTracker,
     ElementsFilterHandler,
@@ -31,7 +30,6 @@ from .utils.osmium_handlers import (
 )
 from .utils.common import (
     get_aoi_path,
-    get_aoi_name,
     get_original_aoi_path,
     get_current_aoi_info,
     get_current_aoi_path,
@@ -239,7 +237,7 @@ def add_added_deleted_and_modified_elements(tracker, local_aoi_handler, upstream
 
     upstream_referenced_elements = tracker.get_referenced_elements(upstream_aoi_handler)
 
-    # TODO: deleted elements
+    # TODO: deleted elements, this has not been taken care of, but seems to work.
     upstream_deleted_elements = tracker.get_deleted_elements(upstream_aoi_handler)
     upstream_referenced_elements_map = {
         elemtype: {
