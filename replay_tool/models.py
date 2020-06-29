@@ -73,8 +73,8 @@ class ReplayToolConfig(models.Model):
     )
     original_aoi_file_name = models.CharField(
         max_length=300,
-        default="local_aoi.osm",
-        help_text="File name for original aoi"
+        default="original_aoi.osm",
+        help_text="File name for original aoi[osm file located inside aoi along with manifest json]"
     )
     overpass_api_url = models.CharField(
         max_length=100,
