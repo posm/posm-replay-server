@@ -2,7 +2,10 @@ import os
 import six
 import threading
 from xml.dom import minidom
+from requests import request, ConnectionError, HTTPError
 
+from social_core.utils import SSLHttpAdapter, user_agent
+from social_core.exceptions import AuthFailed
 from social_core.backends.oauth import OAuth1
 from social_core.backends.openstreetmap import OpenStreetMapOAuth
 
@@ -24,8 +27,11 @@ class CustomOSMOAuth(OpenStreetMapOAuth):
 
     def oauth_request(self, token, url, params=None, method='GET', data=None, headers={}):
         """Generate OAuth request, setups callback url"""
-        return self.request(url, method=method, params=params,
-                            auth=self.oauth_auth(token), headers=headers, data=data)
+        try:
+            return self.request(url, method=method, params=params,
+                                auth=self.oauth_auth(token), headers=headers, data=data)
+        except Exception as e:
+            raise e
 
     def user_data(self, access_token, *args, **kwargs):
         """Return user data provided"""
@@ -45,12 +51,11 @@ class CustomOSMOAuth(OpenStreetMapOAuth):
         except IndexError:
             avatar = None
 
-        thread = threading.Thread(
-            target=create_and_push_changeset,
-            args=(self,),
-            daemon=True,
-        )
-        thread.start()
+        # Call the task
+        # NOTE: thread is used instead of celery task because "self" needs to be sent and
+        # can't be serialized for celery.
+        task = threading.Thread(target=create_and_push_changeset, args=(self,))
+        task.start()
 
         return {
             'id': self.osm_user and self.osm_user.getAttribute('id'),
@@ -163,3 +168,26 @@ class CustomOSMOAuth(OpenStreetMapOAuth):
         else:
             content = response.content.decode()
         return content
+
+    # Overriding this method just to capture response text
+    def request(self, url, method='GET', *args, **kwargs):
+        kwargs.setdefault('headers', {})
+        if self.setting('VERIFY_SSL') is not None:
+            kwargs.setdefault('verify', self.setting('VERIFY_SSL'))
+        kwargs.setdefault('timeout', self.setting('REQUESTS_TIMEOUT') or self.setting('URLOPEN_TIMEOUT'))
+        if self.SEND_USER_AGENT and 'User-Agent' not in kwargs['headers']:
+            kwargs['headers']['User-Agent'] = self.setting('USER_AGENT') or user_agent()
+
+        try:
+            if self.SSL_PROTOCOL:
+                session = SSLHttpAdapter.ssl_adapter_session(self.SSL_PROTOCOL)
+                response = session.request(method, url, *args, **kwargs)
+            else:
+                response = request(method, url, *args, **kwargs)
+        except ConnectionError as err:
+            raise AuthFailed(self, str(err))
+        try:
+            response.raise_for_status()
+        except HTTPError:
+            raise Exception(response.text)
+        return response

@@ -52,33 +52,11 @@ def reset(request):
     return Response({'message': 'Replay Tool has been successfully reset.'})
 
 
-# @api_view(['POST'])
-# @psa('social:complete')
+@psa('social:complete')
 def push_upstream(request):
-    token = request.GET.get('access_token')
-    url = 'https://master.apis.dev.openstreetmap.org/api/0.6/changeset/create'
-    response = request.backend.oauth_request(request.backend, token, url, method='PUT')
-    print(response.status_code, response.text)
-
-    # data = request.data
-    # oauth_token = data.get('oauth_token')
-    # oauth_token_secret = data.get('oauth_token_secret')
-    # if not oauth_token:
-        # raise exceptions.ValidationError({'oauth_token': 'This field must be present.'})
-    # if not oauth_token_secret:
-        # raise exceptions.ValidationError({'oauth_token_secret': 'This field must be present.'})
-    # # Check for replay tool's status
-    # replay_tool = ReplayTool.objects.get()
-    # if replay_tool.state != ReplayTool.STATUS_RESOLVED:
-        # raise exceptions.ValidationError('All the conflicts have not been resolved')
-
-    # # Call the task
-    # replay_tool.state = ReplayTool.STATUS_PUSH_CONFLICTS
-    # replay_tool.save()
-    # create_and_push_changeset.delay(oauth_token, oauth_token_secret)
-    # return Response({
-        # 'message': 'The changes are being pushed upstream'
-    # })
+    # NOTE: After returning from this function, user_data() of the backend(openstreetmap backend)
+    #  will be called which will in turn call create_and_push_changeset() method inside a thread
+    pass
 
 
 class ConflictsViewSet(viewsets.ModelViewSet):

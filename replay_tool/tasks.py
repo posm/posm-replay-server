@@ -1,16 +1,15 @@
 import requests
 import time
 import os
-import pickle
 import tempfile
 
 import psycopg2
 import osm2geojson
 
-from django.db import transaction, models
+from django.db import transaction
 from typing import NewType
 
-from celery import shared_task
+from posm_replay.celery import app
 
 from .models import (
     ReplayTool, LocalChangeSet,
@@ -441,11 +440,9 @@ def generate_geojsons(osmpath):
     return geojson
 
 
-@shared_task
-# NOTE: not used
 @set_error_status_on_exception(
     prev_state=ReplayTool.STATUS_RESOLVED,
-    curr_state=ReplayTool.STATUS_PUSHED_UPSTREAM
+    curr_state=ReplayTool.STATUS_PUSH_CONFLICTS
 )
 def create_and_push_changeset(osm_oauth_backend):
     # Create changeset
@@ -458,7 +455,7 @@ def create_and_push_changeset(osm_oauth_backend):
     osm_oauth_backend.close_changeset(changeset.changeset_id)
 
 
-@shared_task
+@app.task
 def task_prepare_data_for_replay_tool():
     """
     This is the function that does all the behind the scene tasks like:

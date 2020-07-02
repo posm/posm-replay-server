@@ -444,15 +444,15 @@ class OSMElement(models.Model):
             change_data['action'] = 'delete'
             change_data['data'] = {k: v for k, v in self.local_data.items()}
             change_data['data']['id'] = self.element_id  # Just in case id is not present
-            # Set version to 1 greater than upstream version
-            change_data['data']['version'] = self.upstream_data['version'] + 1
+            # Set version same as upstream
+            change_data['data']['version'] = self.upstream_data['version']
         elif self.local_state == self.LOCAL_STATE_MODIFIED:
             change_data['action'] = 'modify'
             change_data['data'] = get_osm_elems_diff(self.local_data, original_data)
             # diff won't have id, so insert id
             change_data['data']['id'] = self.element_id
-            # Set version to 1 greater than upstream version
-            change_data['data']['version'] = self.upstream_data['version'] + 1
+            # Set version same as upstream version
+            change_data['data']['version'] = self.upstream_data['version']
         elif self.local_state == self.LOCAL_STATE_CONFLICTING:
             diff = get_osm_elems_diff(resolved_data, original_data)
             action = 'delete' if diff.get('deleted') else 'modify'
@@ -460,15 +460,14 @@ class OSMElement(models.Model):
             change_data['data'] = diff
             # diff won't have id, so insert id
             change_data['data']['id'] = self.element_id
-            # Set version to 1 greater than upstream version
-            change_data['data']['version'] = self.upstream_data['version'] + 1
+            # Set version same as upstream version
+            change_data['data']['version'] = self.upstream_data['version']
         else:
             raise Exception(f"Invalid value 'f{self.local_state}' for local state")
 
         if self.type == 'node':
             # The location info is either the local location data or location data
             # in resolved data. The former is the case when it is just modified
-            # and no conflict with upstream. The later is the case when there is conflict
             location = change_data['data'].pop('location', None)
             if location:
                 change_data['data']['lat'] = location['lat']
@@ -477,6 +476,9 @@ class OSMElement(models.Model):
             if resolved_data.get('location'):
                 change_data['data']['lat'] = resolved_data['location']['lat']
                 change_data['data']['lon'] = resolved_data['location']['lon']
+            else:
+                change_data['data']['lat'] = self.local_data['location']['lat']
+                change_data['data']['lon'] = self.local_data['location']['lon']
         return change_data
 
     @classmethod
