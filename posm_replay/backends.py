@@ -27,11 +27,8 @@ class CustomOSMOAuth(OpenStreetMapOAuth):
 
     def oauth_request(self, token, url, params=None, method='GET', data=None, headers={}):
         """Generate OAuth request, setups callback url"""
-        try:
-            return self.request(url, method=method, params=params,
-                                auth=self.oauth_auth(token), headers=headers, data=data)
-        except Exception as e:
-            raise e
+        return self.request(url, method=method, params=params,
+                            auth=self.oauth_auth(token), headers=headers, data=data)
 
     def user_data(self, access_token, *args, **kwargs):
         """Return user data provided"""

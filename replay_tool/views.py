@@ -11,7 +11,7 @@ from social_django.utils import psa
 
 from .tasks import task_prepare_data_for_replay_tool, create_and_push_changeset
 
-from .models import ReplayTool, OSMElement, ReplayToolConfig
+from .models import ReplayTool, OSMElement, ReplayToolConfig, LocalChangeSet
 from .serializers.models import (
     ReplayToolSerializer,
     OSMElementSerializer,
@@ -40,7 +40,7 @@ def trigger(request):
 
 
 @api_view(['POST'])
-def retrigger(request):
+def retrigger_all(request):
     ReplayTool.reset()
     task_prepare_data_for_replay_tool.delay()
     return Response({'message': 'Replay Tool has been successfully re-triggered.'})
@@ -50,6 +50,40 @@ def retrigger(request):
 def reset(request):
     ReplayTool.reset()
     return Response({'message': 'Replay Tool has been successfully reset.'})
+
+
+@api_view(['POST'])
+def retrigger(request):
+    replay_tool = ReplayTool.objects.get()
+    RT = ReplayTool
+    if replay_tool.state == RT.STATUS_GATHERING_CHANGESETS:
+        LocalChangeSet.objects.all().delete()
+        OSMElement.objects.all().delete()
+        replay_tool.state = RT.STATUS_NOT_TRIGGERRED
+    elif replay_tool.state == RT.STATUS_EXTRACTING_UPSTREAM_AOI:
+        # Nothing extra to be done, just creates files, which will be overridden
+        replay_tool.state = RT.STATUS_GATHERING_CHANGESETS
+    elif replay_tool.state == RT.STATUS_EXTRACTING_LOCAL_AOI:
+        # Nothing extra to be done, just creates files, which will be overridden
+        replay_tool.state = RT.STATUS_EXTRACTING_UPSTREAM_AOI
+    elif replay_tool.state == RT.STATUS_DETECTING_CONFLICTS:
+        replay_tool.state = RT.STATUS_EXTRACTING_LOCAL_AOI
+        OSMElement.objects.all().delete()
+    elif replay_tool.state == RT.STATUS_CREATING_GEOJSONS:
+        replay_tool.state = RT.STATUS_DETECTING_CONFLICTS
+        # Do nothing, re-generating geojsons will override the contents
+    elif replay_tool.state in [RT.STATUS_RESOLVED, RT.STATUS_CONFLICTS]:
+        replay_tool.state = RT.STATUS_EXTRACTING_UPSTREAM_AOI
+        OSMElement.objects.all().delete()
+    elif replay_tool.state == RT.STATUS_PUSH_CONFLICTS:
+        pass
+        # TODO: What exactly the step should be
+
+    replay_tool.has_errored = False
+    replay_tool.error_details = ""
+    replay_tool.is_current_state_complete = True
+    replay_tool.save()
+    return Response({'message': 'Replay Tool has been successfully re-triggered.'})
 
 
 @psa('social:complete')
