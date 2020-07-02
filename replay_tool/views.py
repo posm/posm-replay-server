@@ -91,6 +91,11 @@ class ConflictsViewSet(viewsets.ModelViewSet):
         osm_element.resolved_from = None
         osm_element.save()
 
+        # Change state of replay tool to conflict, just in case it has been resolved
+        replay_tool = ReplayTool.objects.get()
+        replay_tool.state = ReplayTool.STATUS_CONFLICTS
+        replay_tool.save()
+
         # Update the referenced elements
         reset_referenced_elements(osm_element)
 
