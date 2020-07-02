@@ -20,8 +20,7 @@ docker-compose up
 
 ```
 # Get data
-curl -o jawalakhel.zip https://github.com/posm/posm-replay-client/files/4855795/Jawalakhel.zip
-unzip jawalakhel.zip
+curl -L -o data.zip https://github.com/posm/posm-replay-server/files/4863291/data.zip
 
 # Copy aoi
 mkdir /opt/data/aoi -p
@@ -31,7 +30,7 @@ mv Jawalakhel /opt/data/aoi
 # Load data
 docker-compose exec server bash
 python3 manage.py loaddata replay_tool_data.json
-rm replay_tool_data.json
+rm replay_tool_data.json data.zip
 ```
 
 ## Deployment
