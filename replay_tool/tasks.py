@@ -441,7 +441,7 @@ def generate_geojsons(osmpath):
 
 
 @set_error_status_on_exception(
-    prev_state=ReplayTool.STATUS_RESOLVED,
+    prev_state=ReplayTool.STATUS_RESOLVING_CONFLICTS,
     curr_state=ReplayTool.STATUS_PUSH_CONFLICTS
 )
 def create_and_push_changeset(osm_oauth_backend):
@@ -489,10 +489,11 @@ def task_prepare_data_for_replay_tool():
     )
     logger.info("Generated geojsons")
     replay_tool = ReplayTool.objects.get()
+    replay_tool.state = replay_tool.STATUS_RESOLVING_CONFLICTS
     if OSMElement.get_conflicting_elements().count() > 0:
         logger.info("Conflicts detected")
-        replay_tool.state = replay_tool.STATUS_CONFLICTS
+        replay_tool.is_current_state_complete = False
     else:
         logger.info("No conflicts detected")
-        replay_tool.state = replay_tool.STATUS_RESOLVED
+        replay_tool.is_current_state_complete = True
     replay_tool.save()

@@ -9,7 +9,7 @@ from django.views.generic.base import TemplateView
 from social_django.utils import psa
 
 
-from .tasks import task_prepare_data_for_replay_tool, create_and_push_changeset
+from .tasks import task_prepare_data_for_replay_tool
 
 from .models import ReplayTool, OSMElement, ReplayToolConfig, LocalChangeSet
 from .serializers.models import (
@@ -72,12 +72,15 @@ def retrigger(request):
     elif replay_tool.state == RT.STATUS_CREATING_GEOJSONS:
         replay_tool.state = RT.STATUS_DETECTING_CONFLICTS
         # Do nothing, re-generating geojsons will override the contents
-    elif replay_tool.state in [RT.STATUS_RESOLVED, RT.STATUS_CONFLICTS]:
+    elif replay_tool.state == RT.STATUS_RESOLVING_CONFLICTS:
         replay_tool.state = RT.STATUS_EXTRACTING_UPSTREAM_AOI
         OSMElement.objects.all().delete()
     elif replay_tool.state == RT.STATUS_PUSH_CONFLICTS:
-        pass
-        # TODO: What exactly the step should be
+        replay_tool.state = RT.STATUS_NOT_TRIGGERRED
+        # Remove everything and start over
+        # NOTE: fuzzy about what exactly needs to be done
+        LocalChangeSet.objects.all().delete()
+        OSMElement.objects.all().delete()
 
     replay_tool.has_errored = False
     replay_tool.error_details = ""
@@ -127,7 +130,8 @@ class ConflictsViewSet(viewsets.ModelViewSet):
 
         # Change state of replay tool to conflict, just in case it has been resolved
         replay_tool = ReplayTool.objects.get()
-        replay_tool.state = ReplayTool.STATUS_CONFLICTS
+        replay_tool.state = ReplayTool.STATUS_RESOLVING_CONFLICTS
+        replay_tool.is_current_state_complete = False
         replay_tool.save()
 
         # Update the referenced elements
@@ -177,7 +181,7 @@ class ConflictsViewSet(viewsets.ModelViewSet):
 
         if OSMElement.get_conflicting_elements().count() == 0:
             replay_tool = ReplayTool.objects.get()
-            replay_tool.state = ReplayTool.STATUS_RESOLVED
+            replay_tool.is_current_state_complete = True
             replay_tool.save()
         return Response(OSMElementSerializer(osm_element).data)
 
@@ -209,7 +213,7 @@ class ConflictsViewSet(viewsets.ModelViewSet):
 
         if OSMElement.get_conflicting_elements().count() == 0:
             replay_tool = ReplayTool.objects.get()
-            replay_tool.state = ReplayTool.STATUS_RESOLVED
+            replay_tool.is_current_state_complete = True
             replay_tool.save()
         return Response(OSMElementSerializer(osm_element).data)
 

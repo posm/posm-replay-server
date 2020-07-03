@@ -124,10 +124,8 @@ class ReplayTool(models.Model):
     STATUS_EXTRACTING_LOCAL_AOI = 'extracting_local_aoi'  # State 3
     STATUS_DETECTING_CONFLICTS = 'detecting_conflicts'  # State 4
     STATUS_CREATING_GEOJSONS = 'creating_geojsons'  # State 5
-    STATUS_CONFLICTS = 'conflicts'  # State 6
-    STATUS_RESOLVED = 'resolved'  # State 6
+    STATUS_RESOLVING_CONFLICTS = 'resolving_conflicts'  # State 6;
     STATUS_PUSH_CONFLICTS = 'pushing_conflicts'  # State 7
-    STATUS_PUSHED_UPSTREAM = 'pushed_upstream'  # State 8
 
     CHOICES_STATUS = (
         (STATUS_NOT_TRIGGERRED, 'Not Triggered'),
@@ -136,10 +134,8 @@ class ReplayTool(models.Model):
         (STATUS_EXTRACTING_UPSTREAM_AOI, 'Extracting Upstream Aoi'),
         (STATUS_DETECTING_CONFLICTS, 'Detecting Conflicts'),
         (STATUS_CREATING_GEOJSONS, 'Creating GeoJSONs'),
-        (STATUS_CONFLICTS, 'Conflicts'),
-        (STATUS_RESOLVED, 'Resolved'),
+        (STATUS_RESOLVING_CONFLICTS, 'Resolving Conflicts'),
         (STATUS_PUSH_CONFLICTS, 'Push Conflicts'),
-        (STATUS_PUSHED_UPSTREAM, 'Pushed Upstream'),
     )
 
     state = models.CharField(
@@ -163,9 +159,9 @@ class ReplayTool(models.Model):
         return self.state != self.STATUS_NOT_TRIGGERRED
 
     @classmethod
-    def reset(cls, state=STATUS_NOT_TRIGGERRED):
+    def reset(cls):
         r, _ = cls.objects.get_or_create()
-        r.state = state
+        r.state = cls.STATUS_NOT_TRIGGERRED
         r.is_current_state_complete = True
         r.elements_data = dict()
         r.has_errored = False
