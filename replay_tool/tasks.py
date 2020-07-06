@@ -127,6 +127,7 @@ def get_original_element_versions():
     curr_state=ReplayTool.STATUS_EXTRACTING_LOCAL_AOI
 )
 def get_local_aoi_extract():
+    return
     config = ReplayToolConfig.load()
     db_user = config.posm_db_user
     db_password = config.posm_db_password
@@ -168,6 +169,7 @@ def get_local_aoi_extract():
     curr_state=ReplayTool.STATUS_EXTRACTING_UPSTREAM_AOI
 )
 def get_current_aoi_extract():
+    return
     [w, s, e, n] = get_current_aoi_info()['bbox']
     overpass_query = get_overpass_query(s, w, n, e)
     overpass_api_url = ReplayToolConfig.load().overpass_api_url
@@ -250,35 +252,41 @@ def add_added_deleted_and_modified_elements(tracker, local_aoi_handler, upstream
             upstream_data = upstream_referenced_elements_map[elemtype][elem['id']]
             if not upstream_data.get('tags'):
                 upstream_data.pop('tags', None)
-            OSMElement.objects.create(
+            OSMElement.objects.update_or_create(
                 type=elemtype[:-1],  # the elemtype is plural: nodes, ways, etc but type is singular
                 element_id=elem['id'],
-                local_data=elem,
-                upstream_data=upstream_data,
-                local_state=OSMElement.LOCAL_STATE_MODIFIED,
-                status=OSMElement.STATUS_RESOLVED,
+                defaults=dict(
+                    local_data=elem,
+                    upstream_data=upstream_data,
+                    local_state=OSMElement.LOCAL_STATE_MODIFIED,
+                    status=OSMElement.STATUS_RESOLVED,
+                )
             )
 
     for elemtype, elems in local_added_elements.items():
         for elem in elems:
-            OSMElement.objects.create(
+            OSMElement.objects.update_or_create(
                 type=elemtype[:-1],  # the elemtype is plural: nodes, ways, etc but type is singular
                 element_id=elem['id'],
-                local_data=elem,
-                local_state=OSMElement.LOCAL_STATE_ADDED,
-                status=OSMElement.STATUS_RESOLVED,
+                defaults=dict(
+                    local_data=elem,
+                    local_state=OSMElement.LOCAL_STATE_ADDED,
+                    status=OSMElement.STATUS_RESOLVED,
+                )
             )
 
     for elemtype, elems in local_deleted_elements.items():
         for elem in elems:
             upstream_data = upstream_referenced_elements_map[elemtype].get(elem['id']) or {}
-            OSMElement.objects.create(
+            OSMElement.objects.update_or_create(
                 type=elemtype[:-1],  # the elemtype is plural: nodes, ways, etc but type is singular
                 element_id=elem['id'],
-                local_data=elem,
-                upstream_data=upstream_data,
-                local_state=OSMElement.LOCAL_STATE_DELETED,
-                status=OSMElement.STATUS_RESOLVED,
+                defaults=dict(
+                    local_data=elem,
+                    upstream_data=upstream_data,
+                    local_state=OSMElement.LOCAL_STATE_DELETED,
+                    status=OSMElement.STATUS_RESOLVED,
+                )
             )
 
 
@@ -306,8 +314,10 @@ def filter_referenced_elements_and_detect_conflicts():
     upstream_elements: FilteredElements = filter_elements_from_aoi_handler(tracker, upstream_aoi_handler)
     local_elements: FilteredElements = filter_elements_from_aoi_handler(tracker, local_aoi_handler)
 
+    # Find and create OSMElement objects for each of the added/modified/deleted elements
     add_added_deleted_and_modified_elements(tracker, local_aoi_handler, upstream_aoi_handler)
 
+    # Get conflicting elements ids from the tracker and aoi handlers
     conflicting_elements: ConflictingElements = get_conflicting_elements(
         get_referenced_and_deleted_elements(local_elements),
         get_referenced_and_deleted_elements(upstream_elements),
@@ -320,23 +330,27 @@ def filter_referenced_elements_and_detect_conflicts():
 
     # NOW add referring ways and relations
     for rid, relation in local_aoi_handler.referring_relations.items():
-        OSMElement.objects.create(
+        OSMElement.objects.get_or_create(
             element_id=rid,
             type=OSMElement.TYPE_RELATION,
-            local_data=relation,
-            upstream_data=relation,
-            local_state=OSMElement.LOCAL_STATE_REFERRING,
-            status=OSMElement.STATUS_UNRESOLVED,
+            defaults=dict(
+                local_data=relation,
+                upstream_data=relation,
+                local_state=OSMElement.LOCAL_STATE_REFERRING,
+                status=OSMElement.STATUS_UNRESOLVED,
+            )
         )
 
     for wid, way in local_aoi_handler.referring_ways.items():
-        OSMElement.objects.create(
+        OSMElement.objects.get_or_create(
             element_id=wid,
             type=OSMElement.TYPE_WAY,
-            local_data=way,
-            upstream_data=way,
-            local_state=OSMElement.LOCAL_STATE_REFERRING,
-            status=OSMElement.STATUS_UNRESOLVED,
+            defaults=dict(
+                local_data=way,
+                upstream_data=way,
+                local_state=OSMElement.LOCAL_STATE_REFERRING,
+                status=OSMElement.STATUS_UNRESOLVED,
+            )
         )
 
     # Get conflicting nodes and create map
