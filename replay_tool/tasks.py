@@ -6,8 +6,8 @@ import tempfile
 import psycopg2
 import osm2geojson
 
-from django.db import transaction
-from typing import NewType
+from django.db import transaction, models
+from typing import NewType, Tuple
 
 from posm_replay.celery import app
 
@@ -55,6 +55,7 @@ OVERPASS_API_URL = 'http://overpass-api.de/api/interpreter'
 OSMOSIS_COMMAND_TIMEOUT_SECS = 10
 
 ElementTypeStr = NewType('ElementTypeStr', str)
+AOIHandlerTriplet = NewType('AOIHandlerTriplet', Tuple[AOIHandler, AOIHandler, AOIHandler])
 
 
 def get_first_changeset_id() -> int:
@@ -182,7 +183,7 @@ def get_current_aoi_extract():
     return True
 
 
-def track_elements_from_local_changesets():
+def track_elements_from_local_changesets() -> OSMElementsTracker:
     tracker = OSMElementsTracker()
     for changeset in LocalChangeSet.objects.all():
         # Create named temp file
@@ -196,7 +197,7 @@ def track_elements_from_local_changesets():
     return tracker
 
 
-def track_elements_and_get_aoi_handlers(tracker):
+def track_elements_and_get_aoi_handlers(tracker: OSMElementsTracker) -> Tuple[AOIHandler, AOIHandler, AOIHandler]:
     aoi_path = get_aoi_path()
     local_aoi_path = os.path.join(aoi_path, 'local_aoi.osm')
     current_aoi_path = os.path.join(aoi_path, 'current_aoi.osm')
@@ -232,15 +233,39 @@ def save_elements_count_data(local_aoi_handler: AOIHandler, upstream_aoi_handler
     tool.save()
 
 
-def add_added_deleted_and_modified_elements(tracker, local_aoi_handler, upstream_aoi_handler):
+def add_added_deleted_and_modified_elements(tracker: OSMElementsTracker,
+                                            local_aoi_handler: OSMElementsTracker,
+                                            upstream_aoi_handler: OSMElementsTracker):
     local_added_elements = tracker.get_added_elements(local_aoi_handler)
     local_modified_elements = tracker.get_modified_elements(local_aoi_handler)
     local_deleted_elements = tracker.get_deleted_elements(local_aoi_handler)
 
     upstream_referenced_elements = tracker.get_referenced_elements(upstream_aoi_handler)
 
-    # TODO: deleted elements, this has not been taken care of, but seems to work.
     upstream_deleted_elements = tracker.get_deleted_elements(upstream_aoi_handler)
+    # HANDLE DELETED ELEMENTS
+    # Check if existing partially-resolved/resolved elememts are deleted in upstream aoi
+    for elemtype, elems in upstream_deleted_elements.items():
+        existing_resolved_elements = OSMElement.objects.filter(
+            type=elemtype[:-1],
+            element_id__in=elems.keys(),
+            status=OSMElement.STATUS_RESOLVED,
+        )
+        existing_unresolved_elements = OSMElement.objects.filter(
+            ~models.Q(status=OSMElement.STATUS_RESOLVED),
+            type=elemtype[:-1],
+            element_id__in=elems.keys(),
+        )
+        # Set status to partially_resolved for resolved element and for other just update upstream data
+        existing_resolved_elements.update(
+            upstream_data={'deleted': True},
+            status=OSMElement.STATUS_PARTIALLY_RESOLVED
+        )
+        existing_unresolved_elements.update(
+            upstream_data={'deleted': True},
+            status=OSMElement.STATUS_PARTIALLY_RESOLVED
+        )
+
     upstream_referenced_elements_map = {
         elemtype: {
             x['id']: x
@@ -319,10 +344,11 @@ def get_referenced_and_deleted_elements(elements: FilteredElements) -> dict:
 )
 def filter_referenced_elements_and_detect_conflicts():
     tracker = track_elements_from_local_changesets()
-    original_aoi_handler, local_aoi_handler, upstream_aoi_handler = track_elements_and_get_aoi_handlers(tracker)
+    handlers: AOIHandlerTriplet = track_elements_and_get_aoi_handlers(tracker)
+    original_aoi_handler, local_aoi_handler, upstream_aoi_handler = handlers
 
     # Get versions
-    version_handler = get_original_element_versions()
+    version_handler: VersionHandler = get_original_element_versions()
 
     save_elements_count_data(local_aoi_handler, upstream_aoi_handler)
 
@@ -340,8 +366,16 @@ def filter_referenced_elements_and_detect_conflicts():
     )
 
     for elemtype, ids in conflicting_elements.items():
-        OSMElement.objects.filter(type=elemtype[:-1], element_id__in=ids).\
-            update(status=OSMElement.STATUS_UNRESOLVED, local_state=OSMElement.LOCAL_STATE_CONFLICTING)
+        OSMElement.objects.filter(
+            ~models.Q(local_state=OSMElement.LOCAL_STATE_CONFLICTING),  # Only pull the ones that are not conflicting
+            # The conflicting elements are the ones from previous resolving and are already taken care of in 
+            # add_added_deleted_and_modified_elements() method
+            type=elemtype[:-1],
+            element_id__in=ids,
+        ).update(
+            status=OSMElement.STATUS_UNRESOLVED,
+            local_state=OSMElement.LOCAL_STATE_CONFLICTING
+        )
 
     # NOW add referring ways and relations
     for rid, relation in local_aoi_handler.referring_relations.items():

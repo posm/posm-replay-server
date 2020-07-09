@@ -168,6 +168,7 @@ class OSMElementsTracker:
     Keeps tracks of added, referenced, modified and deleted elements.
     """
     def __init__(self):
+        # NOTE: The following are populated when the tracker instance is passed to AOIHandler. This could be better
         self.referenced_elements = {
             'nodes': set(), 'relations': set(), 'ways': set()
         }
