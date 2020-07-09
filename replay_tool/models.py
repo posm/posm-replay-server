@@ -127,6 +127,17 @@ class ReplayTool(models.Model):
     STATUS_RESOLVING_CONFLICTS = 'resolving_conflicts'  # State 6;
     STATUS_PUSH_CONFLICTS = 'pushing_conflicts'  # State 7
 
+    STATE_ORDER = {
+        STATUS_NOT_TRIGGERRED: 0,
+        STATUS_GATHERING_CHANGESETS: 1,
+        STATUS_EXTRACTING_UPSTREAM_AOI: 2,
+        STATUS_EXTRACTING_LOCAL_AOI: 3,
+        STATUS_DETECTING_CONFLICTS: 4,
+        STATUS_CREATING_GEOJSONS: 5,
+        STATUS_RESOLVING_CONFLICTS: 6,
+        STATUS_PUSH_CONFLICTS: 7,
+    }
+
     CHOICES_STATUS = (
         (STATUS_NOT_TRIGGERRED, 'Not Triggered'),
         (STATUS_GATHERING_CHANGESETS, 'Gathering Changesets'),

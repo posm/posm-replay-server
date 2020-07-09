@@ -40,6 +40,7 @@ from .utils.common import (
 )
 from .utils.conflicts import (
     get_conflicting_elements,
+    do_elements_conflict,
 
     # Typings
     ConflictingElements,
@@ -252,16 +253,30 @@ def add_added_deleted_and_modified_elements(tracker, local_aoi_handler, upstream
             upstream_data = upstream_referenced_elements_map[elemtype][elem['id']]
             if not upstream_data.get('tags'):
                 upstream_data.pop('tags', None)
-            OSMElement.objects.update_or_create(
+            # if same, mark resolved, else mark unresolved
+            # Get Object, which potentially already exists
+            osmelem = OSMElement.objects.filter(
                 type=elemtype[:-1],  # the elemtype is plural: nodes, ways, etc but type is singular
                 element_id=elem['id'],
-                defaults=dict(
+            ).first()
+
+            # if not exists, just create
+            if osmelem is None:
+                OSMElement.objects.create(
+                    type=elemtype[:-1],  # the elemtype is plural: nodes, ways, etc but type is singular
+                    element_id=elem['id'],
                     local_data=elem,
                     upstream_data=upstream_data,
                     local_state=OSMElement.LOCAL_STATE_MODIFIED,
                     status=OSMElement.STATUS_RESOLVED,
                 )
-            )
+            else:
+                # Element already exists, check for attributes conflicts in element upstream
+                # and currently pulled upstream_data
+                conflicting = do_elements_conflict(elem.upstream_data, upstream_data)
+                if conflicting and elem.status == OSMElement.STATUS_RESOLVED:
+                    elem.status = OSMElement.STATUS_PARTIALLY_RESOLVED
+                elem.save()
 
     for elemtype, elems in local_added_elements.items():
         for elem in elems:
@@ -470,44 +485,54 @@ def create_and_push_changeset(osm_oauth_backend):
 
 
 @app.task
-def task_prepare_data_for_replay_tool():
+def task_prepare_data_for_replay_tool(start_state: str = None):
     """
+    @start_state: Begin from a particular state
     This is the function that does all the behind the scene tasks like:
     - gathering changesets from local apidb
     - gathering current aoi extract
     - filtering out referenced nodes
     - marking added, modified, deleted nodes
     """
-    logger.info("Gathering local changesets")
-    gather_changesets()
-    logger.info("Gathered local changesets")
+    RT = ReplayTool
+    state_order = RT.STATE_ORDER
 
-    logger.info("Get current aoi extract")
-    get_current_aoi_extract()
-    logger.info("Got current aoi extract")
+    if start_state is None or state_order[start_state] <= state_order[RT.STATUS_NOT_TRIGGERRED]:
+        logger.info("Gathering local changesets")
+        gather_changesets()
+        logger.info("Gathered local changesets")
 
-    logger.info("Get local aoi extract")
-    get_local_aoi_extract()
-    logger.info("Got local aoi extract")
+    if start_state is None or state_order[start_state] <= state_order[RT.STATUS_GATHERING_CHANGESETS]:
+        logger.info("Get current aoi extract")
+        get_current_aoi_extract()
+        logger.info("Got current aoi extract")
 
-    logger.info("Filtering referenced elements")
-    original_handler, local_handler, upstream_handler = \
-        filter_referenced_elements_and_detect_conflicts()
-    logger.info("Filtered referenced elements")
+    if start_state is None or state_order[start_state] <= state_order[RT.STATUS_EXTRACTING_UPSTREAM_AOI]:
+        logger.info("Get local aoi extract")
+        get_local_aoi_extract()
+        logger.info("Got local aoi extract")
 
-    logger.info("Generating geojsons")
-    generate_all_geojsons(
-        original_handler.ref_osm_path,
-        local_handler.ref_osm_path,
-        upstream_handler.ref_osm_path
-    )
-    logger.info("Generated geojsons")
-    replay_tool = ReplayTool.objects.get()
-    replay_tool.state = replay_tool.STATUS_RESOLVING_CONFLICTS
-    if OSMElement.get_conflicting_elements().count() > 0:
-        logger.info("Conflicts detected")
-        replay_tool.is_current_state_complete = False
-    else:
-        logger.info("No conflicts detected")
-        replay_tool.is_current_state_complete = True
+    if start_state is None or state_order[start_state] <= state_order[RT.STATUS_EXTRACTING_LOCAL_AOI]:
+        logger.info("Filtering referenced elements")
+        original_handler, local_handler, upstream_handler = \
+            filter_referenced_elements_and_detect_conflicts()
+        logger.info("Filtered referenced elements")
+
+    if start_state is None or state_order[start_state] <= state_order[RT.STATUS_DETECTING_CONFLICTS]:
+        logger.info("Generating geojsons")
+        generate_all_geojsons(
+            original_handler.ref_osm_path,
+            local_handler.ref_osm_path,
+            upstream_handler.ref_osm_path
+        )
+    if start_state is None or state_order[start_state] <= state_order[RT.STATUS_CREATING_GEOJSONS]:
+        logger.info("Generated geojsons")
+        replay_tool = RT.objects.get()
+        replay_tool.state = replay_tool.STATUS_RESOLVING_CONFLICTS
+        if OSMElement.get_conflicting_elements().count() > 0:
+            logger.info("Conflicts detected")
+            replay_tool.is_current_state_complete = False
+        else:
+            logger.info("No conflicts detected")
+            replay_tool.is_current_state_complete = True
     replay_tool.save()

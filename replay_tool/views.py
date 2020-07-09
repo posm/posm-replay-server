@@ -49,6 +49,7 @@ def retrigger_all(request):
 @api_view(['POST'])
 def reset(request):
     ReplayTool.reset()
+    task_prepare_data_for_replay_tool()
     return Response({'message': 'Replay Tool has been successfully reset.'})
 
 
@@ -58,7 +59,6 @@ def retrigger(request):
     RT = ReplayTool
     if replay_tool.state == RT.STATUS_GATHERING_CHANGESETS:
         LocalChangeSet.objects.all().delete()
-        OSMElement.objects.all().delete()
         replay_tool.state = RT.STATUS_NOT_TRIGGERRED
     elif replay_tool.state == RT.STATUS_EXTRACTING_UPSTREAM_AOI:
         # Nothing extra to be done, just creates files, which will be overridden
@@ -77,15 +77,14 @@ def retrigger(request):
         OSMElement.objects.all().delete()
     elif replay_tool.state == RT.STATUS_PUSH_CONFLICTS:
         replay_tool.state = RT.STATUS_NOT_TRIGGERRED
-        # Remove everything and start over
-        # NOTE: fuzzy about what exactly needs to be done
+        # Don't remove the OSMElements, they will be reused
         LocalChangeSet.objects.all().delete()
-        OSMElement.objects.all().delete()
 
     replay_tool.has_errored = False
     replay_tool.error_details = ""
     replay_tool.is_current_state_complete = True
     replay_tool.save()
+    task_prepare_data_for_replay_tool.delay(replay_tool.state)
     return Response({'message': 'Replay Tool has been successfully re-triggered.'})
 
 

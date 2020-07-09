@@ -1,6 +1,6 @@
 from copy import deepcopy
 
-from typing import List, Tuple
+from typing import List, Tuple, Set
 from mypy_extensions import TypedDict
 
 
@@ -17,6 +17,15 @@ def pop_irrlevant_osm_attrs(elem: dict):
         for k, v in elem.items()
         if k not in irrelevant_attrs
     }
+
+
+# Not used yet, can be used when we require to know which fields do not match
+def diff(dict1: dict, dict2: dict) -> Set[str]:
+    d1_keys = set(dict1.keys())
+    d2_keys = set(dict2.keys())
+    difference = d1_keys.symmetric_difference(d2_keys)
+    unequal_fields = {k for k, v in dict1.items() if dict2.get(k) != v}
+    return difference.union(unequal_fields)
 
 
 def do_elements_conflict(element1_serialized: dict, element2_serialized: dict) -> bool:
