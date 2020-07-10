@@ -3,7 +3,7 @@ from rest_framework.views import APIView
 from rest_framework import viewsets, exceptions
 from rest_framework.response import Response
 
-from django.db import transaction
+from django.db import transaction, models
 
 from django.views.generic.base import TemplateView
 from social_django.utils import psa
@@ -96,8 +96,17 @@ def push_upstream(request):
 
 
 class AllChangesViewset(viewsets.ReadOnlyModelViewSet):
-    queryset = OSMElement.objects.all()
     serializer_class = OSMElementSerializer
+
+    def get_queryset(self, *args, **kwrags):
+        queryset = OSMElement.objects.all()
+        if self.request.query_params.get('state') == 'no-conflicts':
+            # Return only non conflicting elements
+            return queryset.filter(
+                ~models.Q(local_state=OSMElement.LOCAL_STATE_CONFLICTING),
+            )
+        else:
+            return queryset
 
 
 class ConflictsViewSet(viewsets.ModelViewSet):
