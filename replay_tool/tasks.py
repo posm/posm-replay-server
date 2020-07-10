@@ -129,7 +129,6 @@ def get_original_element_versions():
     curr_state=ReplayTool.STATUS_EXTRACTING_LOCAL_AOI
 )
 def get_local_aoi_extract():
-    return
     config = ReplayToolConfig.load()
     db_user = config.posm_db_user
     db_password = config.posm_db_password
@@ -171,7 +170,6 @@ def get_local_aoi_extract():
     curr_state=ReplayTool.STATUS_EXTRACTING_UPSTREAM_AOI
 )
 def get_current_aoi_extract():
-    return
     [w, s, e, n] = get_current_aoi_info()['bbox']
     overpass_query = get_overpass_query(s, w, n, e)
     overpass_api_url = ReplayToolConfig.load().overpass_api_url
@@ -246,15 +244,16 @@ def add_added_deleted_and_modified_elements(tracker: OSMElementsTracker,
     # HANDLE DELETED ELEMENTS
     # Check if existing partially-resolved/resolved elememts are deleted in upstream aoi
     for elemtype, elems in upstream_deleted_elements.items():
+        elem_ids = [x['id'] for x in elems]
         existing_resolved_elements = OSMElement.objects.filter(
             type=elemtype[:-1],
-            element_id__in=elems.keys(),
+            element_id__in=elem_ids,
             status=OSMElement.STATUS_RESOLVED,
         )
         existing_unresolved_elements = OSMElement.objects.filter(
             ~models.Q(status=OSMElement.STATUS_RESOLVED),
             type=elemtype[:-1],
-            element_id__in=elems.keys(),
+            element_id__in=elem_ids,
         )
         # Set status to partially_resolved for resolved element and for other just update upstream data
         existing_resolved_elements.update(

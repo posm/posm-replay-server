@@ -49,7 +49,7 @@ def retrigger_all(request):
 @api_view(['POST'])
 def reset(request):
     ReplayTool.reset()
-    task_prepare_data_for_replay_tool()
+    task_prepare_data_for_replay_tool.deley()
     return Response({'message': 'Replay Tool has been successfully reset.'})
 
 
@@ -93,6 +93,11 @@ def push_upstream(request):
     # NOTE: After returning from this function, user_data() of the backend(openstreetmap backend)
     #  will be called which will in turn call create_and_push_changeset() method inside a thread
     pass
+
+
+class AllChangesViewset(viewsets.ReadOnlyModelViewSet):
+    queryset = OSMElement.objects.all()
+    serializer_class = OSMElementSerializer
 
 
 class ConflictsViewSet(viewsets.ModelViewSet):
