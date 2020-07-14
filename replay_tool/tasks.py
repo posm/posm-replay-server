@@ -51,6 +51,7 @@ logger = logging.getLogger(__name__)
 
 
 OVERPASS_API_URL = 'http://overpass-api.de/api/interpreter'
+OSM_API_MAX_ELEMENTS_LIMIT = 10000
 
 OSMOSIS_COMMAND_TIMEOUT_SECS = 10
 
@@ -297,13 +298,16 @@ def add_added_deleted_and_modified_elements(tracker: OSMElementsTracker,
             else:
                 # Element already exists, check for attributes conflicts in element upstream
                 # and currently pulled upstream_data
-                conflicting = do_elements_conflict(elem.upstream_data, upstream_data)
-                if conflicting and elem.status == OSMElement.STATUS_RESOLVED:
-                    elem.status = OSMElement.STATUS_PARTIALLY_RESOLVED
-                elem.save()
+                # Do nothing if already pushed
+                if elem.status != OSMElement.STATUS_PUSHED:
+                    conflicting = do_elements_conflict(elem.upstream_data, upstream_data)
+                    if conflicting and elem.status == OSMElement.STATUS_RESOLVED:
+                        elem.status = OSMElement.STATUS_PARTIALLY_RESOLVED
+                    elem.save()
 
     for elemtype, elems in local_added_elements.items():
         for elem in elems:
+            # TODO: get and check if it is already pushed
             OSMElement.objects.update_or_create(
                 type=elemtype[:-1],  # the elemtype is plural: nodes, ways, etc but type is singular
                 element_id=elem['id'],
@@ -317,6 +321,7 @@ def add_added_deleted_and_modified_elements(tracker: OSMElementsTracker,
     for elemtype, elems in local_deleted_elements.items():
         for elem in elems:
             upstream_data = upstream_referenced_elements_map[elemtype].get(elem['id']) or {}
+            # TODO: get and check if it is already pushed
             OSMElement.objects.update_or_create(
                 type=elemtype[:-1],  # the elemtype is plural: nodes, ways, etc but type is singular
                 element_id=elem['id'],
@@ -378,6 +383,7 @@ def filter_referenced_elements_and_detect_conflicts():
 
     # NOW add referring ways and relations
     for rid, relation in local_aoi_handler.referring_relations.items():
+        # TODO: check if already pushed
         OSMElement.objects.get_or_create(
             element_id=rid,
             type=OSMElement.TYPE_RELATION,
@@ -390,6 +396,7 @@ def filter_referenced_elements_and_detect_conflicts():
         )
 
     for wid, way in local_aoi_handler.referring_ways.items():
+        # TODO: check if already pushed
         OSMElement.objects.get_or_create(
             element_id=wid,
             type=OSMElement.TYPE_WAY,
@@ -425,7 +432,7 @@ def filter_referenced_elements_and_detect_conflicts():
         node.save()
 
     # Do the same for nodes and relations
-    for nid, referring_wayids in local_aoi_handler.nodes_references_by_ways.items():
+    for nid, referring_relationids in local_aoi_handler.nodes_references_by_relations.items():
         node = nodes_map.get(nid)
         # If the node already has some refferer(probably way) just ignore this one
         if not node or node.reffered_by:
@@ -434,8 +441,8 @@ def filter_referenced_elements_and_detect_conflicts():
         # This is because, the conflict is in fact in the position of node contained by
         # one of the relations, and it is enough that any of the relations be shown,
         # at least for now.
-        referring_wayid = referring_wayids[0]  # There should be at least one entry
-        referrer = OSMElement.objects.get(element_id=referring_wayid, type=OSMElement.TYPE_WAY)
+        referring_relation_id = referring_relationids[0]  # There should be at least one entry
+        referrer = OSMElement.objects.get(element_id=referring_relation_id, type=OSMElement.TYPE_RELATION)
         node.reffered_by = referrer
         node.save()
     return original_aoi_handler, local_aoi_handler, upstream_aoi_handler
@@ -502,19 +509,76 @@ def generate_geojsons(osmpath):
     return geojson
 
 
-@set_error_status_on_exception(
-    prev_state=ReplayTool.STATUS_RESOLVING_CONFLICTS,
-    curr_state=ReplayTool.STATUS_PUSH_CONFLICTS
-)
-def create_and_push_changeset(osm_oauth_backend):
-    # Create changeset
-    changeset = osm_oauth_backend.get_or_create_changeset()
+# @set_error_status_on_exception(
+#     prev_state=ReplayTool.STATUS_RESOLVING_CONFLICTS,
+#     curr_state=ReplayTool.STATUS_PUSH_CONFLICTS
+# )
+def create_and_push_changeset(osm_oauth_backend, to_push_elements_ids=None):
+    # TODO: handle to_push_elements_ids
+    all_elems = OSMElement.objects.filter(
+        ~models.Q(local_state=OSMElement.LOCAL_STATE_REFERRING),
+        ~models.Q(status=OSMElement.STATUS_UNRESOLVED),
+        ~models.Q(status=OSMElement.STATUS_PUSHED),
+    )
+    if all_elems.count() < OSM_API_MAX_ELEMENTS_LIMIT:
+        # Create changeset
+        changeset = osm_oauth_backend.get_or_create_changeset()
+        # Upload the changeset
+        osm_oauth_backend.upload_changeset(changeset.changeset_id)
+        # Close the changeset
+        osm_oauth_backend.close_changeset(changeset.changeset_id)
 
-    # Upload the changeset
-    osm_oauth_backend.upload_changeset(changeset.changeset_id)
+        # TODO: update status of osm elements to pushed
+        # and probably do clean up
+        return
 
-    # Close the changeset
-    osm_oauth_backend.close_changeset(changeset.changeset_id)
+    # Else, send elements in chunk
+    logger.warn(f"There are more elements than the limit {OSM_API_MAX_ELEMENTS_LIMIT}. Pushing in chunks.")
+    while True:
+        to_push_elements_ids: set = {}
+        # Get Relations and the referred elements in chunk
+        relations = OSMElement.objects.filter(
+            ~models.Q(local_state=OSMElement.LOCAL_STATE_REFERRING),
+            ~models.Q(status=OSMElement.STATUS_UNRESOLVED),
+            ~models.Q(status=OSMElement.STATUS_PUSHED),
+            type=OSMElement.TYPE_RELATION,
+        ).prefetch_related('referenced_elements')[:OSM_API_MAX_ELEMENTS_LIMIT]
+
+        for relation in relations:
+            curr_count = len(to_push_elements_ids)
+            ref_elements = relation.get_nested_referenced_elements()
+            if curr_count + 1 + len(ref_elements) >= OSM_API_MAX_ELEMENTS_LIMIT:
+                # TODO: do push and call this function recursively
+                break
+            to_push_elements_ids.add(relation.id)
+            to_push_elements_ids = to_push_elements_ids.union({x.id for x in ref_elements})
+
+        # Get Ways and the referred elements in chunk
+        ways = OSMElement.objects.filter(
+            ~models.Q(local_state=OSMElement.LOCAL_STATE_REFERRING),
+            ~models.Q(status=OSMElement.STATUS_UNRESOLVED),
+            ~models.Q(status=OSMElement.STATUS_PUSHED),
+            type=OSMElement.TYPE_WAY,
+        ).prefetch_related('referenced_elements')[:OSM_API_MAX_ELEMENTS_LIMIT - len(to_push_elements_ids)]
+        for way in ways:
+            curr_count = len(to_push_elements_ids)
+            ref_elements = way.get_nested_referenced_elements()
+            if curr_count + 1 + len(ref_elements) >= OSM_API_MAX_ELEMENTS_LIMIT:
+                # TODO: do push and call this function recursively
+                break
+            to_push_elements_ids.add(way.id)
+            to_push_elements_ids = to_push_elements_ids.union({x.id for x in ref_elements})
+
+        # Get nodes
+        nodes = OSMElement.objects.filter(
+            ~models.Q(local_state=OSMElement.LOCAL_STATE_REFERRING),
+            ~models.Q(status=OSMElement.STATUS_UNRESOLVED),
+            ~models.Q(status=OSMElement.STATUS_PUSHED),
+            type=OSMElement.TYPE_NODE,
+        )[:OSM_API_MAX_ELEMENTS_LIMIT - len(to_push_elements_ids)]
+        to_push_elements_ids = to_push_elements_ids.union({x.id for x in nodes})
+
+        create_and_push_changeset(osm_oauth_backend, to_push_elements_ids)
 
 
 @app.task

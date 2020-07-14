@@ -253,6 +253,7 @@ class OSMElement(models.Model):
         (LOCAL_STATE_CONFLICTING, 'Conflicting'),
     )
 
+    STATUS_PUSHED = 'pushed'
     STATUS_RESOLVED = 'resolved'
     STATUS_PARTIALLY_RESOLVED = 'partially_resolved'
     STATUS_UNRESOLVED = 'unresolved'
@@ -261,6 +262,7 @@ class OSMElement(models.Model):
         (STATUS_RESOLVED, 'Resolved'),
         (STATUS_PARTIALLY_RESOLVED, 'Partially Resolved'),
         (STATUS_UNRESOLVED, 'Unresolved'),
+        (STATUS_PUSHED, 'Pushed'),
     )
 
     RESOLVED_FROM_THEIRS = 'theirs'
@@ -301,6 +303,15 @@ class OSMElement(models.Model):
 
     def __str__(self):
         return f'{self.type.title()} {self.element_id}: {self.status}'
+
+    def get_nested_referenced_elements(self):
+        # TODO: check cycles. Although there should be none
+        elements = []
+        for ref_elem in self.referenced_elements.all().prefetch_related('referenced_elements'):
+            if ref_elem.id in (y.id for y in elements):
+                continue
+            elements.extend(ref_elem.get_nested_referenced_elements())
+        return elements
 
     @classmethod
     def get_all_local_elements(cls):
@@ -498,9 +509,9 @@ class OSMElement(models.Model):
 
         # Map ids, map of locally created elements ids and ids to be sent to upstream(negative values)
         # The mapped ids will be used wherever the elements are referenced
-        new_nodes_ids_map = {x.element_id: -(i + 1) for i, x in enumerate(added_nodes)}
-        new_ways_ids_map = {x.element_id: -(i + 1) for i, x in enumerate(added_ways)}
-        new_relations_ids_map = {x.element_id: -(i + 1) for i, x in enumerate(added_relations)}
+        new_nodes_ids_map = {x.element_id: -(i + changeset_id) for i, x in enumerate(added_nodes)}
+        new_ways_ids_map = {x.element_id: -(i + changeset_id) for i, x in enumerate(added_ways)}
+        new_relations_ids_map = {x.element_id: -(i + changeset_id) for i, x in enumerate(added_relations)}
 
         def _write_change(element):
             changeset_data = element.get_osm_change_data()
@@ -518,6 +529,7 @@ class OSMElement(models.Model):
         to_send_elements = cls.objects.filter(
             ~models.Q(local_state=OSMElement.LOCAL_STATE_REFERRING),
             ~models.Q(status=OSMElement.STATUS_UNRESOLVED),
+            ~models.Q(status=OSMElement.STATUS_PUSHED),
         )
         # First add nodes
         for element in to_send_elements.filter(type=cls.TYPE_NODE):
