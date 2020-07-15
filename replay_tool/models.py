@@ -314,6 +314,14 @@ class OSMElement(models.Model):
         return elements
 
     @classmethod
+    def get_unpushed_elements(cls):
+        return cls.objects.filter(
+            ~models.Q(local_state=OSMElement.LOCAL_STATE_REFERRING),
+            ~models.Q(status=OSMElement.STATUS_UNRESOLVED),
+            ~models.Q(status=OSMElement.STATUS_PUSHED),
+        )
+
+    @classmethod
     def get_all_local_elements(cls):
         """Returns all local elements that might even not have conflicted"""
         return cls.objects.filter(
@@ -500,12 +508,21 @@ class OSMElement(models.Model):
         return change_data
 
     @classmethod
-    def get_upstream_changeset(cls, changeset_id):
+    def get_upstream_changeset(cls, changeset_id, to_send_elements):
         changeset_writer = ChangesetsToXMLWriter()
         # Get added elements
-        added_nodes = cls.get_added_elements('node')
-        added_ways = cls.get_added_elements('way')
-        added_relations = cls.get_added_elements('relation')
+        added_nodes = to_send_elements.filter(
+            type=OSMElement.TYPE_NODE,
+            state=OSMElement.LOCAL_STATE_ADDED
+        )
+        added_ways = to_send_elements.filter(
+            type=OSMElement.TYPE_WAY,
+            state=OSMElement.LOCAL_STATE_ADDED
+        )
+        added_relations = to_send_elements.filter(
+            type=OSMElement.TYPE_RELATION,
+            state=OSMElement.LOCAL_STATE_ADDED
+        )
 
         # Map ids, map of locally created elements ids and ids to be sent to upstream(negative values)
         # The mapped ids will be used wherever the elements are referenced
@@ -526,11 +543,6 @@ class OSMElement(models.Model):
             changeset_data['data']['changeset'] = changeset_id
             changeset_writer.add_change(changeset_data)
 
-        to_send_elements = cls.objects.filter(
-            ~models.Q(local_state=OSMElement.LOCAL_STATE_REFERRING),
-            ~models.Q(status=OSMElement.STATUS_UNRESOLVED),
-            ~models.Q(status=OSMElement.STATUS_PUSHED),
-        )
         # First add nodes
         for element in to_send_elements.filter(type=cls.TYPE_NODE):
             _write_change(element)

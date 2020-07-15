@@ -89,8 +89,8 @@ class CustomOSMOAuth(OpenStreetMapOAuth):
         changeset_id = int(response.text)
         return UpstreamChangeSet.objects.create(changeset_id=changeset_id)
 
-    def upload_changeset(self, changeset_id):
-        changeset_xml = OSMElement.get_upstream_changeset(changeset_id)
+    def upload_changeset(self, changeset_id, all_elems):
+        changeset_xml = OSMElement.get_upstream_changeset(changeset_id, all_elems)
 
         url = os.path.join(self.oauth_api_url(), f'api/0.6/changeset/{changeset_id}/upload')
         logger.info(f'OSM API URL: {url}')
