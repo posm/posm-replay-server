@@ -541,13 +541,13 @@ def create_and_push_changeset(osm_backend):
 
     def _do_push(osm_oauth_backend, to_push_elements_ids=None):
         if to_push_elements_ids:
-            all_elems = OSMElement.objects.get(id__in=to_push_elements_ids)
+            all_elems = OSMElement.objects.filter(id__in=to_push_elements_ids)
         else:
             all_elems = OSMElement.get_unpushed_elements()
         count = all_elems.count()
         if count == 0:
             return
-        elif count < OSM_API_MAX_ELEMENTS_LIMIT:
+        elif count <= OSM_API_MAX_ELEMENTS_LIMIT:
             # Create changeset
             changeset = osm_oauth_backend.get_or_create_changeset()
             # Upload the changeset

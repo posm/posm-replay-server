@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from django.db import transaction, models
 
 from django.views.generic.base import TemplateView
+
 from social_django.utils import psa
 
 
@@ -167,6 +168,11 @@ class ConflictsViewSet(viewsets.ModelViewSet):
         }
         osm_element.status = OSMElement.STATUS_PARTIALLY_RESOLVED
         osm_element.save()
+        # Update replay tool, in case resolving_conflicts state has been marked complete
+        replay_tool = ReplayTool.objects.get()
+        replay_tool.state = ReplayTool.STATUS_RESOLVING_CONFLICTS
+        replay_tool.is_current_state_complete = False
+        replay_tool.save()
 
         # Update the referenced elements
         update_referenced_elements(osm_element)

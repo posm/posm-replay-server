@@ -503,8 +503,9 @@ class OSMElement(models.Model):
                 change_data['data']['lat'] = resolved_data['location']['lat']
                 change_data['data']['lon'] = resolved_data['location']['lon']
             else:
-                change_data['data']['lat'] = self.local_data['location']['lat']
-                change_data['data']['lon'] = self.local_data['location']['lon']
+                [lon, lat] = self.original_geojson['geometry']['coordinates']
+                change_data['data']['lat'] = lat
+                change_data['data']['lon'] = lon
         return change_data
 
     @classmethod
