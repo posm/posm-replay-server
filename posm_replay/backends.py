@@ -186,5 +186,5 @@ class CustomOSMOAuth(OpenStreetMapOAuth):
         try:
             response.raise_for_status()
         except HTTPError:
-            raise Exception(response.text)
+            raise Exception(f'STATUS CODE: {response.status_code}, BODY: {response.text}')
         return response
