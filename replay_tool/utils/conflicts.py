@@ -28,10 +28,12 @@ def diff(dict1: dict, dict2: dict) -> Set[str]:
     return difference.union(unequal_fields)
 
 
-def do_elements_conflict(element1_serialized: dict, element2_serialized: dict) -> bool:
+def do_elements_conflict(e1_serialized: dict, e2_serialized: dict) -> bool:
     """The elements element1 and element2 represent the same element(same id) and are from
     local and upstream db respectively
     """
+    element1_serialized = deepcopy(e1_serialized)
+    element2_serialized = deepcopy(e2_serialized)
     # pop irrelevant keys and attributes
     element1_serialized = pop_irrlevant_osm_attrs(element1_serialized)
     element2_serialized = pop_irrlevant_osm_attrs(element2_serialized)

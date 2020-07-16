@@ -299,11 +299,12 @@ def add_added_deleted_and_modified_elements(tracker: OSMElementsTracker,
                 # Element already exists, check for attributes conflicts in element upstream
                 # and currently pulled upstream_data
                 # Do nothing if already pushed
-                if elem.status != OSMElement.STATUS_PUSHED:
-                    conflicting = do_elements_conflict(elem.upstream_data, upstream_data)
-                    if conflicting and elem.status == OSMElement.STATUS_RESOLVED:
-                        elem.status = OSMElement.STATUS_PARTIALLY_RESOLVED
-                    elem.save()
+                if osmelem.status != OSMElement.STATUS_PUSHED:
+                    conflicting = do_elements_conflict(osmelem.upstream_data, upstream_data)
+                    if conflicting and osmelem.status == OSMElement.STATUS_RESOLVED:
+                        osmelem.status = OSMElement.STATUS_PARTIALLY_RESOLVED
+                    osmelem.upstream_data = upstream_data
+                    osmelem.save()
 
     for elemtype, elems in local_added_elements.items():
         for elem in elems:

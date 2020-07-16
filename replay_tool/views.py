@@ -78,8 +78,9 @@ def retrigger(request):
         OSMElement.objects.all().delete()
     elif replay_tool.state == RT.STATUS_PUSH_CONFLICTS:
         replay_tool.state = RT.STATUS_NOT_TRIGGERRED
-        # Don't remove the OSMElements, they will be reused
+        # Remove changesets
         LocalChangeSet.objects.all().delete()
+        # Don't remove the OSMElements, they will be reused
 
     replay_tool.has_errored = False
     replay_tool.error_details = ""
