@@ -308,12 +308,12 @@ def add_added_deleted_and_modified_elements(tracker: OSMElementsTracker,
     for elemtype, elems in local_added_elements.items():
         for elem in elems:
             # NOTE: get and check if it is already pushed
-            elem = OSMElement.objects.filter(
+            osmelem = OSMElement.objects.filter(
                 ~models.Q(status=OSMElement.STATUS_PUSHED),
                 type=elemtype[:-1],
                 element_id=elem['id']
-            )
-            if elem is None:
+            ).first()
+            if osmelem is None:
                 OSMElement.objects.create(
                     type=elemtype[:-1],  # the elemtype is plural: nodes, ways, etc but type is singular
                     element_id=elem['id'],
@@ -322,20 +322,20 @@ def add_added_deleted_and_modified_elements(tracker: OSMElementsTracker,
                     status=OSMElement.STATUS_RESOLVED,
                 )
             else:
-                elem.local_data = elem
-                elem.local_state = OSMElement.LOCAL_STATE_ADDED
-                elem.status = OSMElement.STATUS_RESOLVED
-                elem.save()
+                osmelem.local_data = elem
+                osmelem.local_state = OSMElement.LOCAL_STATE_ADDED
+                osmelem.status = OSMElement.STATUS_RESOLVED
+                osmelem.save()
 
     for elemtype, elems in local_deleted_elements.items():
         for elem in elems:
             upstream_data = upstream_referenced_elements_map[elemtype].get(elem['id']) or {}
-            elem = OSMElement.objects.filter(
+            osmelem = OSMElement.objects.filter(
                 ~models.Q(status=OSMElement.STATUS_PUSHED),
                 type=elemtype[:-1],
                 element_id=elem['id']
-            )
-            if elem is None:
+            ).first()
+            if osmelem is None:
                 OSMElement.objects.create(
                     type=elemtype[:-1],  # the elemtype is plural: nodes, ways, etc but type is singular
                     element_id=elem['id'],
@@ -345,11 +345,11 @@ def add_added_deleted_and_modified_elements(tracker: OSMElementsTracker,
                     status=OSMElement.STATUS_RESOLVED,
                 )
             else:
-                elem.local_data = elem
-                elem.upstream_data = upstream_data
-                elem.local_state = OSMElement.LOCAL_STATE_DELETED
-                elem.status = OSMElement.STATUS_RESOLVED
-                elem.save()
+                osmelem.local_data = elem
+                osmelem.upstream_data = upstream_data
+                osmelem.local_state = OSMElement.LOCAL_STATE_DELETED
+                osmelem.status = OSMElement.STATUS_RESOLVED
+                osmelem.save()
 
 
 def get_referenced_and_deleted_elements(elements: FilteredElements) -> dict:
@@ -531,78 +531,81 @@ def generate_geojsons(osmpath):
     return geojson
 
 
-# @set_error_status_on_exception(
-#     prev_state=ReplayTool.STATUS_RESOLVING_CONFLICTS,
-#     curr_state=ReplayTool.STATUS_PUSH_CONFLICTS
-# )
-def create_and_push_changeset(osm_oauth_backend, to_push_elements_ids=None):
+@set_error_status_on_exception(
+    prev_state=ReplayTool.STATUS_RESOLVING_CONFLICTS,
+    curr_state=ReplayTool.STATUS_PUSH_CONFLICTS
+)
+def create_and_push_changeset(osm_backend):
     # NOTE: if `to_push_elements_ids` is not present and there are no more unpushed elements,
     # This function returns, else will recursively call itself
 
-    if to_push_elements_ids:
-        all_elems = OSMElement.objects.get(id__in=to_push_elements_ids)
-    else:
-        all_elems = OSMElement.get_unpushed_elements()
-    count = all_elems.count()
-    if count == 0:
-        return
-    elif count < OSM_API_MAX_ELEMENTS_LIMIT:
-        # Create changeset
-        changeset = osm_oauth_backend.get_or_create_changeset()
-        # Upload the changeset
-        osm_oauth_backend.upload_changeset(changeset.changeset_id, all_elems)
-        # Close the changeset
-        osm_oauth_backend.close_changeset(changeset.changeset_id)
-
-        all_elems.objects.update(status=OSMElement.STATUS_PUSHED)
-        # Return if there are no more unpushed elemenets
-        if OSMElement.get_unpushed_elements().count() == 0:
+    def _do_push(osm_oauth_backend, to_push_elements_ids=None):
+        if to_push_elements_ids:
+            all_elems = OSMElement.objects.get(id__in=to_push_elements_ids)
+        else:
+            all_elems = OSMElement.get_unpushed_elements()
+        count = all_elems.count()
+        if count == 0:
             return
-        # Else, prepare to_push_elements and then call itself recursively
+        elif count < OSM_API_MAX_ELEMENTS_LIMIT:
+            # Create changeset
+            changeset = osm_oauth_backend.get_or_create_changeset()
+            # Upload the changeset
+            osm_oauth_backend.upload_changeset(changeset.changeset_id, all_elems)
+            # Close the changeset
+            osm_oauth_backend.close_changeset(changeset.changeset_id)
 
-    common_filter = (
-        ~models.Q(local_state=OSMElement.LOCAL_STATE_REFERRING),
-        ~models.Q(status=OSMElement.STATUS_UNRESOLVED),
-        ~models.Q(status=OSMElement.STATUS_PUSHED),
-    )
+            all_elems.objects.update(status=OSMElement.STATUS_PUSHED)
+            # Return if there are no more unpushed elemenets
+            if OSMElement.get_unpushed_elements().count() == 0:
+                return
+            # Else, prepare to_push_elements and then call itself recursively
 
-    def _add_ids(objects, id_set):
-        for obj in objects:
-            curr_count = len(id_set)
-            ref_elements = obj.get_nested_referenced_elements()
-            if curr_count + 1 + len(ref_elements) >= OSM_API_MAX_ELEMENTS_LIMIT:
-                break
-            id_set.add(obj.id)
-            id_set = id_set.union({x.id for x in ref_elements})
-        return set(id_set)
+        common_filter = (
+            ~models.Q(local_state=OSMElement.LOCAL_STATE_REFERRING),
+            ~models.Q(status=OSMElement.STATUS_UNRESOLVED),
+            ~models.Q(status=OSMElement.STATUS_PUSHED),
+        )
 
-    # Else, send elements in chunk
-    logger.warn(f"There are more elements than the limit {OSM_API_MAX_ELEMENTS_LIMIT}. Pushing in chunks.")
+        def _add_ids(objects, id_set):
+            for obj in objects:
+                curr_count = len(id_set)
+                ref_elements = obj.get_nested_referenced_elements()
+                if curr_count + 1 + len(ref_elements) >= OSM_API_MAX_ELEMENTS_LIMIT:
+                    break
+                id_set.add(obj.id)
+                id_set = id_set.union({x.id for x in ref_elements})
+            return set(id_set)
 
-    to_push_elements_ids: set = {}
-    # Get Relations and the referred elements in chunk
-    relations = OSMElement.objects.filter(
-        *common_filter,
-        type=OSMElement.TYPE_RELATION,
-    ).prefetch_related('referenced_elements')[:OSM_API_MAX_ELEMENTS_LIMIT]
+        # Else, send elements in chunk
+        logger.warn(f"There are more elements than the limit {OSM_API_MAX_ELEMENTS_LIMIT}. Pushing in chunks.")
 
-    to_push_elements_ids = _add_ids(relations, to_push_elements_ids)
+        to_push_elements_ids: set = {}
+        # Get Relations and the referred elements in chunk
+        relations = OSMElement.objects.filter(
+            *common_filter,
+            type=OSMElement.TYPE_RELATION,
+        ).prefetch_related('referenced_elements')[:OSM_API_MAX_ELEMENTS_LIMIT]
 
-    # Get Ways and the referred elements in chunk
-    ways = OSMElement.objects.filter(
-        *common_filter,
-        type=OSMElement.TYPE_WAY,
-    ).prefetch_related('referenced_elements')[:OSM_API_MAX_ELEMENTS_LIMIT - len(to_push_elements_ids)]
-    to_push_elements_ids = _add_ids(ways, to_push_elements_ids)
+        to_push_elements_ids = _add_ids(relations, to_push_elements_ids)
 
-    # Get nodes
-    nodes = OSMElement.objects.filter(
-        *common_filter,
-        type=OSMElement.TYPE_NODE,
-    )[:OSM_API_MAX_ELEMENTS_LIMIT - len(to_push_elements_ids)]
-    to_push_elements_ids = to_push_elements_ids.union({x.id for x in nodes})
+        # Get Ways and the referred elements in chunk
+        ways = OSMElement.objects.filter(
+            *common_filter,
+            type=OSMElement.TYPE_WAY,
+        ).prefetch_related('referenced_elements')[:OSM_API_MAX_ELEMENTS_LIMIT - len(to_push_elements_ids)]
+        to_push_elements_ids = _add_ids(ways, to_push_elements_ids)
 
-    create_and_push_changeset(osm_oauth_backend, to_push_elements_ids)
+        # Get nodes
+        nodes = OSMElement.objects.filter(
+            *common_filter,
+            type=OSMElement.TYPE_NODE,
+        )[:OSM_API_MAX_ELEMENTS_LIMIT - len(to_push_elements_ids)]
+        to_push_elements_ids = to_push_elements_ids.union({x.id for x in nodes})
+
+        _do_push(osm_oauth_backend, to_push_elements_ids)
+
+    _do_push(osm_backend)
 
 
 @app.task

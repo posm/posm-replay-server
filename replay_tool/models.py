@@ -513,15 +513,15 @@ class OSMElement(models.Model):
         # Get added elements
         added_nodes = to_send_elements.filter(
             type=OSMElement.TYPE_NODE,
-            state=OSMElement.LOCAL_STATE_ADDED
+            local_state=OSMElement.LOCAL_STATE_ADDED
         )
         added_ways = to_send_elements.filter(
             type=OSMElement.TYPE_WAY,
-            state=OSMElement.LOCAL_STATE_ADDED
+            local_state=OSMElement.LOCAL_STATE_ADDED
         )
         added_relations = to_send_elements.filter(
             type=OSMElement.TYPE_RELATION,
-            state=OSMElement.LOCAL_STATE_ADDED
+            local_state=OSMElement.LOCAL_STATE_ADDED
         )
 
         # Map ids, map of locally created elements ids and ids to be sent to upstream(negative values)
