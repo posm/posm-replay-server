@@ -1,6 +1,6 @@
 from copy import deepcopy
 
-from typing import List, Tuple
+from typing import List, Tuple, Set
 from mypy_extensions import TypedDict
 
 
@@ -19,10 +19,21 @@ def pop_irrlevant_osm_attrs(elem: dict):
     }
 
 
-def do_elements_conflict(element1_serialized: dict, element2_serialized: dict) -> bool:
+# Not used yet, can be used when we require to know which fields do not match
+def diff(dict1: dict, dict2: dict) -> Set[str]:
+    d1_keys = set(dict1.keys())
+    d2_keys = set(dict2.keys())
+    difference = d1_keys.symmetric_difference(d2_keys)
+    unequal_fields = {k for k, v in dict1.items() if dict2.get(k) != v}
+    return difference.union(unequal_fields)
+
+
+def do_elements_conflict(e1_serialized: dict, e2_serialized: dict) -> bool:
     """The elements element1 and element2 represent the same element(same id) and are from
     local and upstream db respectively
     """
+    element1_serialized = deepcopy(e1_serialized)
+    element2_serialized = deepcopy(e2_serialized)
     # pop irrelevant keys and attributes
     element1_serialized = pop_irrlevant_osm_attrs(element1_serialized)
     element2_serialized = pop_irrlevant_osm_attrs(element2_serialized)

@@ -16,6 +16,7 @@ services:
           - redis-data:/data
 
     server:
+      image: docker.pkg.github.com/posm/posm-replay-server/posm-replay-server:latest
       build:
         context: ./
       env_file:

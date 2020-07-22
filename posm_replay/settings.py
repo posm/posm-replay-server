@@ -33,7 +33,7 @@ CORS_ALLOW_CREDENTIALS = True
 SOCIAL_AUTH_OPENSTREETMAP_KEY = os.environ.get('OAUTH_CONSUMER_KEY')
 SOCIAL_AUTH_OPENSTREETMAP_SECRET = os.environ.get('OAUTH_CONSUMER_SECRET')
 SOCIAL_AUTH_POSTGRES_JSONFIELD = True
-SOCIAL_AUTH_LOGIN_REDIRECT_URL = '/'
+SOCIAL_AUTH_LOGIN_REDIRECT_URL = os.environ.get('SOCIAL_AUTH_REDIRECT_URL', 'http://replay-tool.posm.io')
 
 # Application definition
 
@@ -56,6 +56,15 @@ INSTALLED_APPS = [
 AUTHENTICATION_BACKENDS = (
     'posm_replay.backends.CustomOSMOAuth',
     'django.contrib.auth.backends.ModelBackend',
+)
+
+SOCIAL_AUTH_PIPELINE = (
+    'social_core.pipeline.social_auth.social_details',
+    'social_core.pipeline.social_auth.social_uid',
+    'social_core.pipeline.social_auth.auth_allowed',
+    'social_core.pipeline.user.get_username',
+    'social_core.pipeline.social_auth.load_extra_data',
+    'social_core.pipeline.user.user_details',
 )
 
 MIDDLEWARE = [

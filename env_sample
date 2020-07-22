@@ -17,7 +17,8 @@ AOI_ROOT=/aoi
 # The directory name of the AOI, resides inside AOI_ROOT, CHANGE THIS to your downloaded aoi's name
 AOI_NAME=Jawalakhel
 # Original aoi file name, which also resides inside AOI_ROOT, probably no need to change
-ORIGINAL_AOI_FILE_NAME=local_aoi.osm
+ORIGINAL_AOI_FILE_NAME=jawalakhel.osm
+# *********************************
 
 # Config for running osmosis from inside docker
 
@@ -28,10 +29,14 @@ OSMOSIS_DB_HOST=172.16.1.1
 OSMOSIS_AOI_ROOT=/opt/data/aoi
 
 # DB setting for server app, No need to change this
+# ***************************
 DATABASE_NAME=postgres
 DATABASE_USER=postgres
 DATABASE_PASSWORD=postgres
+# ***************************
 
+# OVERPASS api url
+OVERPASS_API_URL=http://overpass-api.de/api/interpreter
 
 # OAUTH config
 
@@ -44,4 +49,4 @@ OAUTH_API_URL=https://master.apis.dev.openstreetmap.org
 # In production use production osm api endpoints
 REQUEST_TOKEN_URL=https://master.apis.dev.openstreetmap.org/oauth/request_token
 ACCESS_TOKEN_URL=https://master.apis.dev.openstreetmap.org/oauth/access_token
-AUTHORIZE_URL=https://master.apis.dev.openstreetmap.org/oauth/authorize
+AUTHORIZATION_URL=https://master.apis.dev.openstreetmap.org/oauth/authorize

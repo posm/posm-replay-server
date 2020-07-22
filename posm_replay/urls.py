@@ -25,13 +25,22 @@ from replay_tool.views import (
     retrigger,
     reset,
     LoginPageView,
+    ResolvedElementsView,
+    UnresolvedElementsView,
+    PartialResolvedElementsView,
+    ReplayToolConfigViewset,
+    AllChangesViewset,
 )
 
 
 router = routers.DefaultRouter()
 
 router.register('conflicts', ConflictsViewSet, basename='conflicts')
-
+router.register('resolved-elements', ResolvedElementsView, basename='resolved-elements')
+router.register('unresolved-elements', UnresolvedElementsView, basename='unresolved-elements')
+router.register('partial-resolved-elements', PartialResolvedElementsView, basename='partial-resolved-elements')
+router.register('config', ReplayToolConfigViewset, basename='config')
+router.register('all-changes', AllChangesViewset, basename='all-changes')
 
 urlpatterns = [
     path('admin/', admin.site.urls),

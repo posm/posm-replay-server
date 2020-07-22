@@ -3,19 +3,21 @@ from rest_framework.views import APIView
 from rest_framework import viewsets, exceptions
 from rest_framework.response import Response
 
-from django.db import transaction
+from django.db import transaction, models
 
 from django.views.generic.base import TemplateView
+
 from social_django.utils import psa
 
 
-from .tasks import task_prepare_data_for_replay_tool, create_and_push_changeset
+from .tasks import task_prepare_data_for_replay_tool
 
-from .models import ReplayTool, OSMElement
+from .models import ReplayTool, OSMElement, ReplayToolConfig, LocalChangeSet
 from .serializers.models import (
     ReplayToolSerializer,
     OSMElementSerializer,
     MiniOSMElementSerializer,
+    ReplayToolConfigSerializer,
 )
 
 META_KEYS = [
@@ -39,7 +41,7 @@ def trigger(request):
 
 
 @api_view(['POST'])
-def retrigger(request):
+def retrigger_all(request):
     ReplayTool.reset()
     task_prepare_data_for_replay_tool.delay()
     return Response({'message': 'Replay Tool has been successfully re-triggered.'})
@@ -48,36 +50,65 @@ def retrigger(request):
 @api_view(['POST'])
 def reset(request):
     ReplayTool.reset()
+    task_prepare_data_for_replay_tool.deley()
     return Response({'message': 'Replay Tool has been successfully reset.'})
 
 
-# @api_view(['POST'])
-# @psa('social:complete')
+@api_view(['POST'])
+def retrigger(request):
+    replay_tool = ReplayTool.objects.get()
+    RT = ReplayTool
+    if replay_tool.state == RT.STATUS_GATHERING_CHANGESETS:
+        LocalChangeSet.objects.all().delete()
+        replay_tool.state = RT.STATUS_NOT_TRIGGERRED
+    elif replay_tool.state == RT.STATUS_EXTRACTING_UPSTREAM_AOI:
+        # Nothing extra to be done, just creates files, which will be overridden
+        replay_tool.state = RT.STATUS_GATHERING_CHANGESETS
+    elif replay_tool.state == RT.STATUS_EXTRACTING_LOCAL_AOI:
+        # Nothing extra to be done, just creates files, which will be overridden
+        replay_tool.state = RT.STATUS_EXTRACTING_UPSTREAM_AOI
+    elif replay_tool.state == RT.STATUS_DETECTING_CONFLICTS:
+        replay_tool.state = RT.STATUS_EXTRACTING_LOCAL_AOI
+        OSMElement.objects.all().delete()
+    elif replay_tool.state == RT.STATUS_CREATING_GEOJSONS:
+        replay_tool.state = RT.STATUS_DETECTING_CONFLICTS
+        # Do nothing, re-generating geojsons will override the contents
+    elif replay_tool.state == RT.STATUS_RESOLVING_CONFLICTS:
+        replay_tool.state = RT.STATUS_EXTRACTING_UPSTREAM_AOI
+        OSMElement.objects.all().delete()
+    elif replay_tool.state == RT.STATUS_PUSH_CONFLICTS:
+        replay_tool.state = RT.STATUS_NOT_TRIGGERRED
+        # Remove changesets
+        LocalChangeSet.objects.all().delete()
+        # Don't remove the OSMElements, they will be reused
+
+    replay_tool.has_errored = False
+    replay_tool.error_details = ""
+    replay_tool.is_current_state_complete = True
+    replay_tool.save()
+    task_prepare_data_for_replay_tool.delay(replay_tool.state)
+    return Response({'message': 'Replay Tool has been successfully re-triggered.'})
+
+
+@psa('social:complete')
 def push_upstream(request):
-    token = request.GET.get('access_token')
-    url = 'https://master.apis.dev.openstreetmap.org/api/0.6/changeset/create'
-    response = request.backend.oauth_request(request.backend, token, url, method='PUT')
-    print(response.status_code, response.text)
+    # NOTE: After returning from this function, user_data() of the backend(openstreetmap backend)
+    #  will be called which will in turn call create_and_push_changeset() method inside a thread
+    pass
 
-    # data = request.data
-    # oauth_token = data.get('oauth_token')
-    # oauth_token_secret = data.get('oauth_token_secret')
-    # if not oauth_token:
-        # raise exceptions.ValidationError({'oauth_token': 'This field must be present.'})
-    # if not oauth_token_secret:
-        # raise exceptions.ValidationError({'oauth_token_secret': 'This field must be present.'})
-    # # Check for replay tool's status
-    # replay_tool = ReplayTool.objects.get()
-    # if replay_tool.state != ReplayTool.STATUS_RESOLVED:
-        # raise exceptions.ValidationError('All the conflicts have not been resolved')
 
-    # # Call the task
-    # replay_tool.state = ReplayTool.STATUS_PUSH_CONFLICTS
-    # replay_tool.save()
-    # create_and_push_changeset.delay(oauth_token, oauth_token_secret)
-    # return Response({
-        # 'message': 'The changes are being pushed upstream'
-    # })
+class AllChangesViewset(viewsets.ReadOnlyModelViewSet):
+    serializer_class = OSMElementSerializer
+
+    def get_queryset(self, *args, **kwrags):
+        queryset = OSMElement.objects.all()
+        if self.request.query_params.get('state') == 'no-conflicts':
+            # Return only non conflicting elements
+            return queryset.filter(
+                ~models.Q(local_state=OSMElement.LOCAL_STATE_CONFLICTING),
+            )
+        else:
+            return queryset
 
 
 class ConflictsViewSet(viewsets.ModelViewSet):
@@ -112,6 +143,12 @@ class ConflictsViewSet(viewsets.ModelViewSet):
         osm_element.resolved_from = None
         osm_element.save()
 
+        # Change state of replay tool to conflict, just in case it has been resolved
+        replay_tool = ReplayTool.objects.get()
+        replay_tool.state = ReplayTool.STATUS_RESOLVING_CONFLICTS
+        replay_tool.is_current_state_complete = False
+        replay_tool.save()
+
         # Update the referenced elements
         reset_referenced_elements(osm_element)
 
@@ -132,6 +169,11 @@ class ConflictsViewSet(viewsets.ModelViewSet):
         }
         osm_element.status = OSMElement.STATUS_PARTIALLY_RESOLVED
         osm_element.save()
+        # Update replay tool, in case resolving_conflicts state has been marked complete
+        replay_tool = ReplayTool.objects.get()
+        replay_tool.state = ReplayTool.STATUS_RESOLVING_CONFLICTS
+        replay_tool.is_current_state_complete = False
+        replay_tool.save()
 
         # Update the referenced elements
         update_referenced_elements(osm_element)
@@ -159,7 +201,7 @@ class ConflictsViewSet(viewsets.ModelViewSet):
 
         if OSMElement.get_conflicting_elements().count() == 0:
             replay_tool = ReplayTool.objects.get()
-            replay_tool.state = ReplayTool.STATUS_RESOLVED
+            replay_tool.is_current_state_complete = True
             replay_tool.save()
         return Response(OSMElementSerializer(osm_element).data)
 
@@ -191,7 +233,7 @@ class ConflictsViewSet(viewsets.ModelViewSet):
 
         if OSMElement.get_conflicting_elements().count() == 0:
             replay_tool = ReplayTool.objects.get()
-            replay_tool.state = ReplayTool.STATUS_RESOLVED
+            replay_tool.is_current_state_complete = True
             replay_tool.save()
         return Response(OSMElementSerializer(osm_element).data)
 
@@ -254,8 +296,32 @@ def resolve_referenced_elements(osm_element: OSMElement) -> None:
         node.save()
 
 
+class ReplayToolConfigViewset(viewsets.ModelViewSet):
+    def __init__(self, *args, **kwargs):
+        ReplayToolConfig.load()
+        super().__init__(*args, **kwargs)
+
+    queryset = ReplayToolConfig.objects.all()
+    serializer_class = ReplayToolConfigSerializer
+
+
 class LoginPageView(TemplateView):
     template_name = "login.html"
 
     def get_context_data(self, **kwargs):
         return super().get_context_data(**kwargs)
+
+
+class ResolvedElementsView(viewsets.ReadOnlyModelViewSet):
+    queryset = OSMElement.get_resolved_elements()
+    serializer_class = OSMElementSerializer
+
+
+class UnresolvedElementsView(viewsets.ReadOnlyModelViewSet):
+    queryset = OSMElement.get_conflicting_elements()
+    serializer_class = OSMElementSerializer
+
+
+class PartialResolvedElementsView(viewsets.ReadOnlyModelViewSet):
+    queryset = OSMElement.get_partially_resolved_elements()
+    serializer_class = OSMElementSerializer
