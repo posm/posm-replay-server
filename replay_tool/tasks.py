@@ -146,14 +146,14 @@ def get_local_aoi_extract():
         password={db_password} validateSchemaVersion=no --write-xml file={path}
     '''
     # Write command to named pipe
-    with open('osmosis_command_reader.fifo', 'w') as f:
+    with open('/tmp/osmosis_command/command_reader.fifo', 'w') as f:
         f.write(command)
 
     # wait
     time.sleep(OSMOSIS_COMMAND_TIMEOUT_SECS)
 
     # Read result
-    with open('osmosis_result_reader.fifo') as f:
+    with open('/tmp/osmosis_command/result_reader.fifo') as f:
         # Read the last line
         lines = [x for x in f.readlines() if x]
         if not lines:
