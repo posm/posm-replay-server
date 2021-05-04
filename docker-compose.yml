@@ -1,36 +1,37 @@
 version: '3.2'
 
 services:
-    db:
-      image: postgres:9.5
-      environment:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_USER: postgres
-          POSTGRES_DB: postgres
-      volumes:
-          - postgres-data:/var/lib/postgresql/data
+  db:
+    image: postgres:9.5
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
 
-    redis:
-      image: redis:latest
-      volumes:
-          - redis-data:/data
+  redis:
+    image: redis:latest
+    volumes:
+      - redis-data:/data
 
-    server:
-      image: docker.pkg.github.com/posm/posm-replay-server/posm-replay-server:latest
-      build:
-        context: ./
-      env_file:
-          - .env
-      command: bash -c '/code/scripts/wait-for-it.sh db:5432 && /code/scripts/prod_exec.sh'
-      volumes:
-          - ./:/code
-          - /opt/data/aoi/:/aoi
-          - media:/media
-      ports:
-        - '6007:6007'
-      depends_on:
-          - db
-          - redis
+  server:
+    image: docker.pkg.github.com/posm/posm-replay-server/posm-replay-server:latest
+    build:
+      context: ./
+    env_file:
+      - .env
+    command: bash -c '/code/scripts/wait-for-it.sh db:5432 && /code/scripts/prod_exec.sh'
+    volumes:
+      - ./:/code
+      - /opt/data/aoi/:/aoi
+      - media:/media
+      - ./tmp/osmosis_command/:/tmp/osmosis_command/
+    ports:
+      - '6007:6007'
+    depends_on:
+      - db
+      - redis
 
 volumes:
   media:

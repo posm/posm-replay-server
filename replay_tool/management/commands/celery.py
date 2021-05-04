@@ -17,4 +17,4 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         print('Starting celery worker with autoreload...')
 
-        autoreload.run_with_reloader(restart_celery) 
+        autoreload.run_with_reloader(restart_celery)

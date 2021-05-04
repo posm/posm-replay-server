@@ -1,4 +1,3 @@
-import os
 import requests
 
 from replay_tool.models import ReplayToolConfig

@@ -1,3 +1,5 @@
+import os
+
 from django.db import models, transaction
 from django.contrib.postgres.fields import JSONField
 
@@ -18,90 +20,123 @@ class ChangeData(TypedDict):
 class ReplayToolConfig(models.Model):
     osm_base_url = models.CharField(
         max_length=100,
-        default="http://172.16.1.1:81",
+        null=True,
         help_text="Enter POSM's schema://IP:port that's serving osm."
     )
     posm_db_host = models.CharField(
         max_length=100,
-        default="172.16.1.1",
+        null=True,
         help_text="POSM's IP which listens to psql connections."
     )
     posm_db_name = models.CharField(
         max_length=100,
-        default="osm",
+        null=True,
         help_text="OSM Database Name"
     )
     posm_db_user = models.CharField(
         max_length=100,
-        default="osm",
+        null=True,
         help_text="OSM Database User"
     )
     posm_db_password = models.CharField(
         max_length=100,
-        default="openstreetmap",
+        null=True,
         help_text="OSM Database password"
     )
     aoi_root = models.CharField(
         max_length=100,
-        default="/aoi",
+        null=True,
         help_text="Path inside docker mapped with host's /opt/data/aoi"
     )
     aoi_name = models.CharField(
         max_length=100,
-        default="",
+        null=True,
         help_text="Directory name of AOI which contains manifest.json and other files."
     )
     osmosis_db_host = models.CharField(
         max_length=100,
-        default="172.16.1.1",
+        null=True,
         help_text="This is probably the IP of POSM itself"
     )
     osmosis_aoi_root = models.CharField(
         max_length=100,
-        default="/opt/data/aoi",
+        null=True,
         help_text="Host AOI root location."
     )
     oauth_consumer_key = models.CharField(
         max_length=300,
-        default="",
+        null=True,
         help_text="OSM OAUTH consumer key"
     )
     oauth_consumer_secret = models.CharField(
         max_length=300,
-        default="",
+        null=True,
         help_text="OSM OAUTH consumer secret"
     )
     original_aoi_file_name = models.CharField(
         max_length=300,
-        default="original_aoi.osm",
+        null=True,
         help_text="File name for original aoi[osm file located inside aoi along with manifest json]"
     )
     overpass_api_url = models.CharField(
         max_length=100,
-        default="http://overpass-api.de/api/interpreter",
+        null=True,
         help_text="Overpass api from where upstream data is pulled"
     )
     oauth_api_url = models.CharField(
         max_length=100,
-        default='https://master.apis.dev.openstreetmap.org',
+        null=True,
         help_text="OSM oauth root api endpoint"
     )
 
     request_token_url = models.CharField(
         max_length=300,
-        default="https://master.apis.dev.openstreetmap.org/oauth/request_token",
+        null=True,
         help_text="OSM OAuth api endpoint for request token"
     )
     access_token_url = models.CharField(
         max_length=300,
-        default="https://master.apis.dev.openstreetmap.org/oauth/access_token",
+        null=True,
         help_text="OSM OAuth api endpoint for access token"
     )
     authorization_url = models.CharField(
         max_length=300,
-        default="https://master.apis.dev.openstreetmap.org/oauth/authorize",
+        null=True,
         help_text="OSM OAuth api endpoint for authorization"
     )
+
+    @staticmethod
+    def preset_attributes(config):
+        """
+        Set default variables from environment variables if not provided
+        """
+        for field in [
+            'osm_base_url',
+            'posm_db_host',
+            'posm_db_name',
+            'posm_db_user',
+            'posm_db_password',
+            'aoi_root',
+            'aoi_name',
+            'osmosis_db_host',
+            'osmosis_aoi_root',
+            'oauth_consumer_key',
+            'oauth_consumer_secret',
+            'original_aoi_file_name',
+            'overpass_api_url',
+            'oauth_api_url',
+            'request_token_url',
+            'access_token_url',
+            'authorization_url',
+        ]:
+            system_set_value = os.environ.get(field.upper())
+            if getattr(config, field, None) is None and system_set_value is not None:
+                setattr(config, field, system_set_value)
+        return config
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.preset_attributes(self)
 
     def save(self, *args, **kwargs):
         self.pk = 1
@@ -109,8 +144,7 @@ class ReplayToolConfig(models.Model):
 
     @classmethod
     def load(cls):
-        config, _ = cls.objects.get_or_create(pk=1)
-        return config
+        return cls.objects.get_or_create(pk=1)[0]
 
     def delete(self, *args, **kwargs):
         pass

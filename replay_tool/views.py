@@ -50,7 +50,7 @@ def retrigger_all(request):
 @api_view(['POST'])
 def reset(request):
     ReplayTool.reset()
-    task_prepare_data_for_replay_tool.deley()
+    task_prepare_data_for_replay_tool.delay()
     return Response({'message': 'Replay Tool has been successfully reset.'})
 
 
